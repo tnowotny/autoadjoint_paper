@@ -32,7 +32,6 @@ p= {
     "DT": 1.0,
     "KERNEL_PROFILING": True,
     "RECORDING": True,
-    "PLOTTING": True,
     "NAME": "test",
     "OUT_DIR": ".",
     "SEED": 345
