@@ -25,7 +25,6 @@
 #SBATCH --mail-user=t.nowotny@sussex.ac.uk
 
 # run the application
-. ~/mlgenn_new_env/bin/activate
 srun --exclusive -n 1 --gres=gpu:1 python shd_HPC.py scan_SHD_1/J1_$[$SLURM_ARRAY_TASK_ID*4] &
 srun --exclusive -n 1 --gres=gpu:1 python shd_HPC.py scan_SHD_1/J1_$[$SLURM_ARRAY_TASK_ID*4+1] &
 srun --exclusive -n 1 --gres=gpu:1 python shd_HPC.py scan_SHD_1/J1_$[$SLURM_ARRAY_TASK_ID*4+2] &
