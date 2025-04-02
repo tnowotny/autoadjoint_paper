@@ -20,6 +20,8 @@ import sys
 import os
 import json
 
+from ml_genn.compilers.event_prop_compiler import default_params
+
 import logging
 
 #logging.basicConfig(level=logging.DEBUG)
@@ -72,7 +74,7 @@ num_input = int(np.prod(dataset.sensor_size))
 num_output = len(dataset.classes)
 
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
-network = Network()
+network = Network(default_params)
 with network:
     # Populations
     input = Population(SpikeInput(max_spikes=p["BATCH_SIZE"] * max_spikes),
@@ -94,7 +96,7 @@ max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
 
 compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              losses="sparse_categorical_crossentropy",
-                             reg_lambda= p["REG_LAMBDA"], 
+                             reg_lambda_upper=p["REG_LAMBDA"], reg_lambda_lower=p["REG_LAMBDA"], 
                              reg_nu_upper=14, max_spikes=1500, 
                              optimiser=Adam(0.001), batch_size=p["BATCH_SIZE"], 
                              kernel_profiling=p["KERNEL_PROFILING"])
@@ -106,7 +108,7 @@ with compiled_net:
     if p["RECORDING"]:
         callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
-            VarRecorder(hidden,"Lambdav",key="LVhid"),
+            VarRecorder(hidden,genn_var="LambdaV",key="LVhid"),
             Checkpoint(serialiser),
         ]
     else:
@@ -132,16 +134,16 @@ with compiled_net:
         resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
         resfile.write(f"{e} {np.count_nonzero(hidden_spikes==0)} {mx} {metrics[output].result}\n")
         hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
-        hidden_sg.vars["weight"].pull_from_device()
-        g_view = hidden_sg.vars["weight"].view.reshape((num_input, p["NUM_HIDDEN"]))
+        hidden_sg.vars["g"].pull_from_device()
+        g_view = hidden_sg.vars["g"].view.reshape((num_input, p["NUM_HIDDEN"]))
         g_view[:,hidden_spikes==0] += 0.002
-        hidden_sg.vars["weight"].push_to_device()            
+        hidden_sg.vars["g"].push_to_device()
     compiled_net.save_connectivity((p["NUM_EPOCHS"] - 1,), serialiser)
 
     end_time = perf_counter()
     print(f"Accuracy = {100 * metrics[output].result}%")
     print(f"Time = {end_time - start_time}s")
-    
+        
     if p["KERNEL_PROFILING"]:
         print(f"Neuron update time = {compiled_net.genn_model.neuron_update_time}")
         print(f"Presynaptic update time = {compiled_net.genn_model.presynaptic_update_time}")
@@ -168,6 +170,7 @@ print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 
 # Load network state from final checkpoint
 network.load((0,), serialiser)
+
 compiler = InferenceCompiler(evaluate_timesteps=max_example_timesteps,
                              reset_in_syn_between_batches=True,
                              batch_size=p["BATCH_SIZE"],
