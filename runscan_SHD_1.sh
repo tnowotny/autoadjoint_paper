@@ -4,7 +4,7 @@
 #SBATCH --account=structuretofunction
 
 # set max wallclock time
-#SBATCH --time=4:00:00
+#SBATCH --time=12:00:00
 
 # set name of job
 #SBATCH --job-name=job1

@@ -157,10 +157,10 @@ with compiled_net:
 # Preprocess
 spikes = []
 labels = []
-for i in range(len(dataset)):
-    events, label = dataset[i]
-    spikes.append(preprocess_tonic_spikes(events, dataset.ordering,
-                                          dataset.sensor_size))
+for i in range(len(dataset_test)):
+    events, label = dataset_test[i]
+    spikes.append(preprocess_tonic_spikes(events, dataset_test.ordering,
+                                          dataset_test.sensor_size))
     labels.append(label)
     
 # Determine max spikes and latest spike time
@@ -178,13 +178,13 @@ compiler = InferenceCompiler(evaluate_timesteps=max_example_timesteps,
 compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
 
 with compiled_net:
-    # Evaluate model on numpy dataset
+    # Evaluate model on dataset_test
     start_time = perf_counter()
     metrics, _  = compiled_net.evaluate({input: spikes},
                                         {output: labels})
     end_time = perf_counter()
     resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_test_results.txt"), "a")
-    resfile.write(f"{e} {metrics[output].result}\n")
+    resfile.write(f"{metrics[output].result}\n")
     print(f"Accuracy = {100 * metrics[output].result}%")
     print(f"Time = {end_time - start_time}s")
 

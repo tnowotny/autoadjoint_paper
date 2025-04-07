@@ -29,6 +29,9 @@ p= {
     "BATCH_SIZE": 32,
     "NUM_EPOCHS": 2,
     "REG_LAMBDA": 1e-10,
+    "TAU_A_REG": 50.0,
+    "GRAD_LIMIT": 100.0,
+    "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": True,
     "RECORDING": True,
@@ -94,8 +97,10 @@ max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
 
 compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              losses="sparse_categorical_crossentropy",
-                             reg_lambda= p["REG_LAMBDA"], 
-                             reg_nu_upper=14, max_spikes=1500, 
+                             reg_lambda=p["REG_LAMBDA"],
+                             tau_a_reg=p["TAU_A_REG"],
+                             grad_limit=p["GRAD_LIMIT"],
+                             reg_nu_upper= p["REG_NU_UPPER"], max_spikes=1500, 
                              optimiser=Adam(0.001), batch_size=p["BATCH_SIZE"], 
                              kernel_profiling=p["KERNEL_PROFILING"])
 compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
@@ -112,25 +117,19 @@ with compiled_net:
     else:
         callbacks = [Checkpoint(serialiser)]
 
-    all_metrics = []
-    all_cb_data = []
-    max_lbd = []
     for e in range(p["NUM_EPOCHS"]):
         metrics, cb_data  = compiled_net.train({input: spikes},
                                                {output: labels},
                                                num_epochs=1, shuffle=True,
                                                callbacks=callbacks)
-        all_metrics.append(metrics[output].result)
-        all_cb_data.append(cb_data["spikes_hidden"])
         lbd = cb_data["LVhid"]
         lbd = np.asarray(lbd)
         mx = np.max(np.max(np.abs(lbd)))
-        max_lbd.append(mx)
-        hidden_spikes = np.zeros(p["NUM_HIDDEN"])
-        for cb_d in cb_data['spikes_hidden']:
-            hidden_spikes += cb_d
+        n0 = np.asarray(cb_data['spikes_hidden'])
+        mean_n0 = np.mean(n0, axis = 0)
+        std_n0 = np.std(n0, axis = 0)
         resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
-        resfile.write(f"{e} {np.count_nonzero(hidden_spikes==0)} {mx} {metrics[output].result}\n")
+        resfile.write(f"{e} {np.count_nonzero(mean_n0==0)} {mx} {np.mean(mean_n0)} {np.mean(std_n0)} {metrics[output].result}\n")
         hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
         hidden_sg.vars["weight"].pull_from_device()
         g_view = hidden_sg.vars["weight"].view.reshape((num_input, p["NUM_HIDDEN"]))
@@ -155,10 +154,10 @@ with compiled_net:
 # Preprocess
 spikes = []
 labels = []
-for i in range(len(dataset)):
-    events, label = dataset[i]
-    spikes.append(preprocess_tonic_spikes(events, dataset.ordering,
-                                          dataset.sensor_size))
+for i in range(len(dataset_test)):
+    events, label = dataset_test[i]
+    spikes.append(preprocess_tonic_spikes(events, dataset_test.ordering,
+                                          dataset_test.sensor_size))
     labels.append(label)
     
 # Determine max spikes and latest spike time
@@ -175,13 +174,13 @@ compiler = InferenceCompiler(evaluate_timesteps=max_example_timesteps,
 compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
 
 with compiled_net:
-    # Evaluate model on numpy dataset
+    # Evaluate model on dataset_test
     start_time = perf_counter()
     metrics, _  = compiled_net.evaluate({input: spikes},
                                         {output: labels})
     end_time = perf_counter()
     resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_test_results.txt"), "a")
-    resfile.write(f"{e} {metrics[output].result}\n")
+    resfile.write(f"{metrics[output].result}\n")
     print(f"Accuracy = {100 * metrics[output].result}%")
     print(f"Time = {end_time - start_time}s")
 
