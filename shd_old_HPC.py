@@ -114,25 +114,19 @@ with compiled_net:
     else:
         callbacks = [Checkpoint(serialiser)]
 
-    all_metrics = []
-    all_cb_data = []
-    max_lbd = []
     for e in range(p["NUM_EPOCHS"]):
         metrics, cb_data  = compiled_net.train({input: spikes},
                                                {output: labels},
                                                num_epochs=1, shuffle=True,
                                                callbacks=callbacks)
-        all_metrics.append(metrics[output].result)
-        all_cb_data.append(cb_data["spikes_hidden"])
         lbd = cb_data["LVhid"]
         lbd = np.asarray(lbd)
         mx = np.max(np.max(np.abs(lbd)))
-        max_lbd.append(mx)
-        hidden_spikes = np.zeros(p["NUM_HIDDEN"])
-        for cb_d in cb_data['spikes_hidden']:
-            hidden_spikes += cb_d
+        n0 = np.asarray(cb_data['spikes_hidden'])
+        mean_n0 = np.mean(n0, axis = 0)
+        std_n0 = np.std(n0, axis = 0)
         resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
-        resfile.write(f"{e} {np.count_nonzero(hidden_spikes==0)} {mx} {metrics[output].result}\n")
+        resfile.write(f"{e} {np.count_nonzero(mean_n0==0)} {mx} {np.mean(mean_n0)} {np.mean(std_n0)} {metrics[output].result}\n")
         hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
         hidden_sg.vars["g"].pull_from_device()
         g_view = hidden_sg.vars["g"].view.reshape((num_input, p["NUM_HIDDEN"]))
@@ -170,7 +164,6 @@ print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 
 # Load network state from final checkpoint
 network.load((0,), serialiser)
-
 compiler = InferenceCompiler(evaluate_timesteps=max_example_timesteps,
                              reset_in_syn_between_batches=True,
                              batch_size=p["BATCH_SIZE"],
