@@ -95,7 +95,6 @@ max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
 
 # Load network state from final checkpoint
 network.load((0,), serialiser)
-
 compiler = InferenceCompiler(evaluate_timesteps=max_example_timesteps,
                              reset_in_syn_between_batches=True,
                              batch_size=p["BATCH_SIZE"],

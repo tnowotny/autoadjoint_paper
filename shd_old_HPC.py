@@ -130,7 +130,7 @@ with compiled_net:
         hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
         hidden_sg.vars["g"].pull_from_device()
         g_view = hidden_sg.vars["g"].view.reshape((num_input, p["NUM_HIDDEN"]))
-        g_view[:,hidden_spikes==0] += 0.002
+        g_view[:,mean_n0==0] += 0.002
         hidden_sg.vars["g"].push_to_device()
     compiled_net.save_connectivity((p["NUM_EPOCHS"] - 1,), serialiser)
 
