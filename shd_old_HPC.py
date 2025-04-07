@@ -102,6 +102,9 @@ compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              kernel_profiling=p["KERNEL_PROFILING"])
 compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
 
+resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "w")
+resfile.write(f"# Epoch hidden_n_zero hidden_mean_spike hidden_std_spikes accuracy\n")
+resfile.close()
 with compiled_net:
     # Evaluate model on numpy dataset
     start_time = perf_counter()
@@ -123,6 +126,7 @@ with compiled_net:
         std_n0 = np.std(n0, axis = 0)
         resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
         resfile.write(f"{e} {np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} {np.mean(std_n0)} {metrics[output].result}\n")
+        resfile.close()
         hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
         hidden_sg.vars["g"].pull_from_device()
         g_view = hidden_sg.vars["g"].view.reshape((num_input, p["NUM_HIDDEN"]))
@@ -132,19 +136,20 @@ with compiled_net:
 
     end_time = perf_counter()
     print(f"Accuracy = {100 * metrics[output].result}%")
-    timefile = open( os.path.join(p["OUT_DIR"], p["NAME"]+"_timing.txt"), "a")
+    timefile = open( os.path.join(p["OUT_DIR"], p["NAME"]+"_timing.txt"), "w")
     if p["KERNEL_PROFILING"]:
-        timefile.write("# Total time Neuron_update_time Presynaptic_update_time Gradient_batch_reduce_time Gradient_learn_time Reset_time Softmax1_time Softmax2_time Softmax3_time\n") 
+        timefile.write("# Total_time Neuron_update_time Presynaptic_update_time Gradient_batch_reduce_time Gradient_learn_time Reset_time Softmax1_time Softmax2_time Softmax3_time\n") 
+        timefile.write(f"{end_time - start_time} ")        
         timefile.write(f"{compiled_net.genn_model.neuron_update_time} ")
         timefile.write(f"{compiled_net.genn_model.presynaptic_update_time} ")
         timefile.write(f"{compiled_net.genn_model.get_custom_update_time('GradientBatchReduce')} ")
         timefile.write(f"{compiled_net.genn_model.get_custom_update_time('GradientLearn')} ")
         timefile.write(f"{compiled_net.genn_model.get_custom_update_time('Reset')} ")
         timefile.write(f"{compiled_net.genn_model.get_custom_update_time('BatchSoftmax1')} ")
-        timefile.write(f"Softmax2 time = {compiled_net.genn_model.get_custom_update_time('BatchSoftmax2')} ")
-        timefile.write(f"Softmax3 time = {compiled_net.genn_model.get_custom_update_time('BatchSoftmax3')}\n")
+        timefile.write(f"{compiled_net.genn_model.get_custom_update_time('BatchSoftmax2')} ")
+        timefile.write(f"{compiled_net.genn_model.get_custom_update_time('BatchSoftmax3')}\n")
     else:
-        timefile.write(f"Time\n")
+        timefile.write(f"# Total_time\n")
         timefile.write(f"{end_time - start_time}\n")
 
 # Preprocess
@@ -175,7 +180,7 @@ with compiled_net:
                                         {output: labels},
                                         callbacks=[])
     end_time = perf_counter()
-    resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_test_results.txt"), "a")
+    resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_test_results.txt"), "w")
     resfile.write(f"{metrics[output].result}\n")
     print(f"Accuracy = {100 * metrics[output].result}%")
     if not p["KERNEL_PROFILING"]:
