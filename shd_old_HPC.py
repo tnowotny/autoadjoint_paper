@@ -108,7 +108,6 @@ with compiled_net:
     if p["RECORDING"]:
         callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
-            VarRecorder(hidden,genn_var="LambdaV",key="LVhid"),
             Checkpoint(serialiser),
         ]
     else:
@@ -119,14 +118,11 @@ with compiled_net:
                                                {output: labels},
                                                num_epochs=1, shuffle=True,
                                                callbacks=callbacks)
-        lbd = cb_data["LVhid"]
-        lbd = np.asarray(lbd)
-        mx = np.max(np.max(np.abs(lbd)))
         n0 = np.asarray(cb_data['spikes_hidden'])
         mean_n0 = np.mean(n0, axis = 0)
         std_n0 = np.std(n0, axis = 0)
         resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
-        resfile.write(f"{e} {np.count_nonzero(mean_n0==0)} {mx} {np.mean(mean_n0)} {np.mean(std_n0)} {metrics[output].result}\n")
+        resfile.write(f"{e} {np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} {np.mean(std_n0)} {metrics[output].result}\n")
         hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
         hidden_sg.vars["g"].pull_from_device()
         g_view = hidden_sg.vars["g"].view.reshape((num_input, p["NUM_HIDDEN"]))
@@ -136,17 +132,20 @@ with compiled_net:
 
     end_time = perf_counter()
     print(f"Accuracy = {100 * metrics[output].result}%")
-    print(f"Time = {end_time - start_time}s")
-        
+    timefile = open( os.path.join(p["OUT_DIR"], p["NAME"]+"_timing.txt"), "a")
     if p["KERNEL_PROFILING"]:
-        print(f"Neuron update time = {compiled_net.genn_model.neuron_update_time}")
-        print(f"Presynaptic update time = {compiled_net.genn_model.presynaptic_update_time}")
-        print(f"Gradient batch reduce time = {compiled_net.genn_model.get_custom_update_time('GradientBatchReduce')}")
-        print(f"Gradient learn time = {compiled_net.genn_model.get_custom_update_time('GradientLearn')}")
-        print(f"Reset time = {compiled_net.genn_model.get_custom_update_time('Reset')}")
-        print(f"Softmax1 time = {compiled_net.genn_model.get_custom_update_time('BatchSoftmax1')}")
-        print(f"Softmax2 time = {compiled_net.genn_model.get_custom_update_time('BatchSoftmax2')}")
-        print(f"Softmax3 time = {compiled_net.genn_model.get_custom_update_time('BatchSoftmax3')}")
+        timefile.write("# Total time Neuron_update_time Presynaptic_update_time Gradient_batch_reduce_time Gradient_learn_time Reset_time Softmax1_time Softmax2_time Softmax3_time\n") 
+        timefile.write(f"{compiled_net.genn_model.neuron_update_time} ")
+        timefile.write(f"{compiled_net.genn_model.presynaptic_update_time} ")
+        timefile.write(f"{compiled_net.genn_model.get_custom_update_time('GradientBatchReduce')} ")
+        timefile.write(f"{compiled_net.genn_model.get_custom_update_time('GradientLearn')} ")
+        timefile.write(f"{compiled_net.genn_model.get_custom_update_time('Reset')} ")
+        timefile.write(f"{compiled_net.genn_model.get_custom_update_time('BatchSoftmax1')} ")
+        timefile.write(f"Softmax2 time = {compiled_net.genn_model.get_custom_update_time('BatchSoftmax2')} ")
+        timefile.write(f"Softmax3 time = {compiled_net.genn_model.get_custom_update_time('BatchSoftmax3')}\n")
+    else:
+        timefile.write(f"Time\n")
+        timefile.write(f"{end_time - start_time}\n")
 
 # Preprocess
 spikes = []
@@ -166,22 +165,19 @@ print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 network.load((0,), serialiser)
 compiler = InferenceCompiler(evaluate_timesteps=max_example_timesteps,
                              reset_in_syn_between_batches=True,
-                             batch_size=p["BATCH_SIZE"],
-                             kernel_profiling=p["KERNEL_PROFILING"])
+                             batch_size=p["BATCH_SIZE"])
 compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
 
 with compiled_net:
     # Evaluate model on dataset_test
     start_time = perf_counter()
     metrics, _  = compiled_net.evaluate({input: spikes},
-                                        {output: labels})
+                                        {output: labels},
+                                        callbacks=[])
     end_time = perf_counter()
     resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_test_results.txt"), "a")
     resfile.write(f"{metrics[output].result}\n")
     print(f"Accuracy = {100 * metrics[output].result}%")
-    print(f"Time = {end_time - start_time}s")
-
-    if p["KERNEL_PROFILING"]:
-        print(f"Neuron update time = {compiled_net.genn_model.neuron_update_time}")
-        print(f"Presynaptic update time = {compiled_net.genn_model.presynaptic_update_time}")
-        print(f"Reset time = {compiled_net.genn_model.get_custom_update_time('Reset')}")
+    if not p["KERNEL_PROFILING"]:
+        timefile.write(f"Time = {end_time - start_time}\n")
+timefile.close()
