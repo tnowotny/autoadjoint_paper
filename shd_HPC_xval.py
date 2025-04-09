@@ -111,7 +111,7 @@ if p["KERNEL_PROFILING"]:
 else:
     timefile.write(f"# Total_time\n")
 resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "w")
-resfile.write(f"# Speaker_left Epoch hidden_n_zero hidden_mean_spike hidden_std_spikes hidden_n_zero hidden_mean_spike hidden_std_spikes train_accuracy validation_accuracy\n")
+resfile.write(f"# Speaker_left Epoch hidden_n_zero hidden_mean_spike hidden_std_spikes val_hidden_n_zero val_hidden_mean_spike val_hidden_std_spikes train_accuracy validation_accuracy\n")
 resfile.close()
 
 for left in spklist:
