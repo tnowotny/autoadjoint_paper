@@ -279,7 +279,7 @@ for left in spklist:
             mean_n0_val = np.mean(n0_val, axis = 0)
             std_n0_val = np.std(n0_val, axis = 0)
             resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
-            resfile.write(f"{left} {e} {np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} {np.std(mean_0)} {np.mean(std_n0)} {np.std{np.std}} {np.count_nonzero(mean_n0_val==0)} {np.mean(mean_n0_val)} {np.std(mean_n0_val)} {np.mean(std_n0_val)} {np.std(std_n0_val)} {metrics[output].result} {val_metrics[output].result}\n")
+            resfile.write(f"{left} {e} {np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} {np.std(mean_0)} {np.mean(std_n0)} {np.std(std_n0)} {np.count_nonzero(mean_n0_val==0)} {np.mean(mean_n0_val)} {np.std(mean_n0_val)} {np.mean(std_n0_val)} {np.std(std_n0_val)} {metrics[output].result} {val_metrics[output].result}\n")
             resfile.close()
             hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
             hidden_sg.vars["weight"].pull_from_device()
