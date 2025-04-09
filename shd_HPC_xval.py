@@ -112,7 +112,7 @@ if p["KERNEL_PROFILING"]:
 else:
     timefile.write(f"# Total_time\n")
 resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "w")
-resfile.write(f"# Speaker_left Epoch hidden_n_zero hidden_mean_spike hidden_std_spikes hidden_n_zero hidden_mean_spike hidden_std_spikes train_accuracy validation_accuracy\n")
+resfile.write(f"# Speaker_left Epoch hidden_n_zero mean_hidden_mean_spike std_hidden_mean_spike mean_hidden_std_spikes std_hidden_std_spikes val_hidden_n_zero val_mean_hidden_mean_spike val_std_hidden_mean_spike val_mean_hidden_std_spikes val_std_hidden_std_spikes train_accuracy validation_accuracy\n")
 resfile.close()
 
 for left in spklist:
@@ -152,7 +152,7 @@ for left in spklist:
             mean_n0_val = np.mean(n0_val, axis = 0)
             std_n0_val = np.std(n0_val, axis = 0)
             resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
-            resfile.write(f"{left} {e} {np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} {np.mean(std_n0)} {np.count_nonzero(mean_n0_val==0)} {np.mean(mean_n0_val)} {np.mean(std_n0_val)} {metrics[output].result} {val_metrics[output].result}\n")
+            resfile.write(f"{left} {e} {np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} {np.std(mean_0)} {np.mean(std_n0)} {np.std{np.std}} {np.count_nonzero(mean_n0_val==0)} {np.mean(mean_n0_val)} {np.std(mean_n0_val)} {np.mean(std_n0_val)} {np.std(std_n0_val)} {metrics[output].result} {val_metrics[output].result}\n")
             resfile.close()
             hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
             hidden_sg.vars["weight"].pull_from_device()
