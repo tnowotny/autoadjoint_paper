@@ -34,7 +34,6 @@ p= {
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": True,
-    "RECORDING": True,
     "NAME": "test",
     "OUT_DIR": ".",
     "SEED": 345
@@ -125,17 +124,13 @@ for left in spklist:
     with compiled_net:
         # Evaluate model on numpy dataset
         start_time = perf_counter()
-        if p["RECORDING"]:
-            callbacks = [
-                SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
-                Checkpoint(serialiser),
-            ]
-            val_callbacks =  [
-                SpikeRecorder(hidden, key="spikes_hidden",record_counts=True)
-            ]
-        else:
-            callbacks = [Checkpoint(serialiser)]
-            val_callbacks = []
+        callbacks = [
+            SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
+            Checkpoint(serialiser),
+        ]
+        val_callbacks =  [
+            SpikeRecorder(hidden, key="spikes_hidden",record_counts=True)
+        ]
 
         for e in range(p["NUM_EPOCHS"]):
             metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: train_spikes},
