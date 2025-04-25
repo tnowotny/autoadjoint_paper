@@ -28,8 +28,8 @@ import copy
 p= {
     "NUM_HIDDEN": 256,
     "BATCH_SIZE": 32,
-    "NUM_EPOCHS": 2,
-    "REG_LAMBDA": 1e-10,
+    "NUM_EPOCHS": 25,
+    "REG_LAMBDA": 5e-5,
     "GRAD_LIMIT": 100.0,
     "REG_NU_UPPER": 14,
     "DT": 1.0,
@@ -41,7 +41,7 @@ p= {
     "T_DELAY": 30,
     "AUGMENT_SHIFT": 40,
     "P_BLEND": 0.5,
-    "N_BLEND": 7000,
+    "N_BLEND": 2000,
 }
 
 class EaseInSchedule(Callback):
@@ -55,7 +55,6 @@ class EaseInSchedule(Callback):
                 optimiser.alpha = (0.001 / 1000.0) * (1.05 ** batch)
             else:
                 optimiser.alpha = 0.001
-
 
 class Shift:
     def __init__(self, f_shift, sensor_size):
@@ -131,14 +130,13 @@ class Delay:
             delayed_events.append(curr_event)
         return np.concatenate(delayed_events)
 
+if len(sys.argv) > 1:
+    fname= f"{sys.argv[1]}.json"
+    with open(fname,"r") as f:
+        p0= json.load(f)
 
-
-fname= f"{sys.argv[1]}.json"
-with open(fname,"r") as f:
-    p0= json.load(f)
-
-for (name,value) in p0.items():
-    p[name]= value
+    for (name,value) in p0.items():
+        p[name]= value
     
 print(p)
 
@@ -147,7 +145,6 @@ np.random.seed(p["SEED"])
 # Get SHD dataset
 dataset = SHD(save_to='../data', train=True)
 # Get number of input and output neurons from dataset 
-# and round up outputs to power-of-two
 num_input = int(np.prod(dataset.sensor_size))
 num_output = len(dataset.classes)
 speakers = dataset.speaker
@@ -168,7 +165,7 @@ for events, label in dataset:
     max_spikes = max(max_spikes, len(d_events))
     latest_spike_time = max(latest_spike_time, np.amax(d_events["t"]) / 1000.0)
 
-# add a generous margin as belnding could lead to more spikes 
+# add a generous margin as blending could lead to more spikes 
 max_spikes = int(max_spikes*1.2)
 print(f"Overall max_spikes limit: {max_spikes}")
 
@@ -183,7 +180,7 @@ with network:
                         num_output, record_spikes=True)
 
     # Connections
-    Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=0.03, sd=0.01)),
+    Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=0.001, sd=0.0003)),
                Exponential(5.0))
     Conn_Pop1_Pop1 = Connection(hidden, hidden, Dense(Normal(mean=0.0, sd=0.02)),
                Exponential(5.0))
@@ -197,7 +194,7 @@ compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              reg_lambda=p["REG_LAMBDA"],
                              grad_limit=p["GRAD_LIMIT"],
                              reg_nu_upper= p["REG_NU_UPPER"], max_spikes=1500, 
-                             optimiser=Adam(0.001), batch_size=p["BATCH_SIZE"], 
+                             optimiser=Adam(0.001*0.001), batch_size=p["BATCH_SIZE"], 
                              kernel_profiling=p["KERNEL_PROFILING"])
 
 timefile = open( os.path.join(p["OUT_DIR"], p["NAME"]+"_timing.txt"), "w")
@@ -245,6 +242,7 @@ for left in spklist:
         start_time = perf_counter()
         callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
+            #VarRecorder(hidden,"SpikeCountBackBatch",key="scnt"),
             Checkpoint(serialiser), EaseInSchedule()
         ]
         val_callbacks =  [
@@ -257,12 +255,14 @@ for left in spklist:
             labels_train = []
             blended_dataset = blend(train, classes)
             for events, label in blended_dataset:
+            #for events, label in train:
                 spikes_train.append(preprocess_tonic_spikes(delay(shift(events)), dataset.ordering,
                                                             (dataset.sensor_size[0]*p["N_DELAY"],
                                                              dataset.sensor_size[1],dataset.sensor_size[2])))
                 labels_train.append(label)
             if e == 0:
-                print(f"Leave speaker {left}: training with {len(spikes_train)} examples and validating with {len(spikes_val)}.") 
+                print(f"Leave speaker {left}: training with {len(spikes_train)} examples and validating with {len(spikes_val)}.")
+
             metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: spikes_train},
                                                                              {output: labels_train},
                                                                              validation_x={input: spikes_val},
@@ -271,6 +271,18 @@ for left in spklist:
                                                                              callbacks=callbacks,
                                                                              validation_callbacks=val_callbacks)
             n0 = np.asarray(cb_data['spikes_hidden'])
+            #for k in range(5):
+            #    fig, ax = plt.subplots(10,10,sharex=True, sharey=True)
+            #    for i in range(10):
+            #        for j in range(10):
+            #            ax[i,j].hist(n0[(k*10+i)*10+j])
+            #            print((k*10+i)*10+j)
+            #scnt = np.asarray(cb_data['scnt'])
+            #print(scnt.shape)
+            #if e < 2:
+            #    plt.figure()
+            #    plt.plot(scnt[:,0,:])
+            #    plt.show()
             mean_n0 = np.mean(n0, axis = 0)
             std_n0 = np.std(n0, axis = 0)
             n0_val = np.asarray(val_cb_data['spikes_hidden'])
@@ -282,7 +294,7 @@ for left in spklist:
             hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
             hidden_sg.vars["weight"].pull_from_device()
             g_view = hidden_sg.vars["weight"].view.reshape((num_input*p["N_DELAY"], p["NUM_HIDDEN"]))
-            g_view[:,mean_n0==0] += 0.002
+            g_view[:,mean_n0==0] += 0.0002
             hidden_sg.vars["weight"].push_to_device()            
         compiled_net.save_connectivity((left,), serialiser)
         end_time = perf_counter()

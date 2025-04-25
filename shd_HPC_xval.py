@@ -27,8 +27,8 @@ import logging
 p= {
     "NUM_HIDDEN": 256,
     "BATCH_SIZE": 32,
-    "NUM_EPOCHS": 2,
-    "REG_LAMBDA": 1e-10,
+    "NUM_EPOCHS": 25,
+    "REG_LAMBDA": 1e-08,
     "GRAD_LIMIT": 100.0,
     "REG_NU_UPPER": 14,
     "DT": 1.0,
@@ -38,12 +38,13 @@ p= {
     "SEED": 345
 }
 
-fname= f"{sys.argv[1]}.json"
-with open(fname,"r") as f:
-    p0= json.load(f)
+if len(sys.argv) > 1:
+    fname= f"{sys.argv[1]}.json"
+    with open(fname,"r") as f:
+        p0= json.load(f)
 
-for (name,value) in p0.items():
-    p[name]= value
+    for (name,value) in p0.items():
+        p[name]= value
     
 print(p)
 
