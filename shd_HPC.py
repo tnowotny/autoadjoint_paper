@@ -39,12 +39,13 @@ p= {
     "SEED": 345
 }
 
-fname= f"{sys.argv[1]}.json"
-with open(fname,"r") as f:
-    p0= json.load(f)
+if len(sys.argv) > 1:
+    fname= f"{sys.argv[1]}.json"
+    with open(fname,"r") as f:
+        p0= json.load(f)
 
-for (name,value) in p0.items():
-    p[name]= value
+    for (name,value) in p0.items():
+        p[name]= value
     
 print(p)
 
