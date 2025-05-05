@@ -22,18 +22,6 @@ import json
 
 import logging
 
-class EaseInSchedule(Callback):
-    def set_params(self, compiled_network, **kwargs):
-        self._optimisers = [o for o, _ in compiled_network.optimisers]
-
-    def on_batch_begin(self, batch):
-        # Set parameter to return value of function
-        for optimiser in self._optimisers:
-            if optimiser.alpha < 0.001 :
-                optimiser.alpha = (0.001 / 1000.0) * (1.05 ** batch)
-            else:
-                optimiser.alpha = 0.001
-
 #logging.basicConfig(level=logging.DEBUG)
 
 p= {
@@ -137,7 +125,7 @@ compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              reg_lambda=0.0,
                              grad_limit=p["GRAD_LIMIT"],
                              reg_nu_upper=0.0, max_spikes=1500, 
-                             optimiser=Adam(0.001*0.001), batch_size=p["BATCH_SIZE"], 
+                             optimiser=Adam(0.001), batch_size=p["BATCH_SIZE"], 
                              kernel_profiling=p["KERNEL_PROFILING"],
                              solver="linear_euler")
 
@@ -163,7 +151,7 @@ for left in spklist:
         callbacks = [
             "batch_progress_bar",
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
-            Checkpoint(serialiser), EaseInSchedule(),
+            Checkpoint(serialiser),
         ]
         val_callbacks =  [
             "batch_progress_bar",
