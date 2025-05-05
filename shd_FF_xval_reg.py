@@ -41,6 +41,8 @@ p= {
     "BATCH_SIZE": 32,
     "NUM_EPOCHS": 50,
     "GRAD_LIMIT": 100.0,
+    "REG_LAMBDA": 2e-5,
+    "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
     "NAME": "test",
@@ -134,9 +136,9 @@ max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
 
 compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              losses="sparse_categorical_crossentropy",
-                             reg_lambda=0.0,
+                             reg_lambda=p["REG_LAMBDA"],
                              grad_limit=p["GRAD_LIMIT"],
-                             reg_nu_upper=0.0, max_spikes=1500, 
+                             reg_nu_upper= p["REG_NU_UPPER"], max_spikes=1500, 
                              optimiser=Adam(0.001*0.001), batch_size=p["BATCH_SIZE"], 
                              kernel_profiling=p["KERNEL_PROFILING"],
                              solver="linear_euler")
