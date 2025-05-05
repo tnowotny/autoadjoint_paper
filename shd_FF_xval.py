@@ -30,7 +30,7 @@ p= {
     "NUM_EPOCHS": 25,
     "GRAD_LIMIT": 100.0,
     "DT": 1.0,
-    "KERNEL_PROFILING": True,
+    "KERNEL_PROFILING": False,
     "NAME": "test",
     "OUT_DIR": ".",
     "SEED": 345
@@ -86,7 +86,7 @@ alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g"
                         output_var_name="v",
                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 100, "v_thr": 1},
                         var_vals={"v": 0, "g": 0})
-
+# raf doesn'work currently (maybe just bad parameter choices)
 raf_neuron = UserNeuron(vars={"x": ("Isyn + b * x - w * y", "0"), "y": ("w * x + b * y", "1")},
                         threshold="y - a_thresh",
                         output_var_name="x",
