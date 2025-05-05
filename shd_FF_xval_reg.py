@@ -41,7 +41,7 @@ p= {
     "BATCH_SIZE": 32,
     "NUM_EPOCHS": 100,
     "GRAD_LIMIT": 100.0,
-    "REG_LAMBDA": 1e-5,
+    "REG_LAMBDA": 2e-5,
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
