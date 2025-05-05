@@ -27,7 +27,7 @@ import logging
 p= {
     "NUM_HIDDEN": 256,
     "BATCH_SIZE": 32,
-    "NUM_EPOCHS": 50,
+    "NUM_EPOCHS": 100,
     "GRAD_LIMIT": 100.0,
     "DT": 1.0,
     "KERNEL_PROFILING": False,

@@ -3,7 +3,7 @@ import numpy as np
 #import mnist
 
 from ml_genn import Connection, Network, Population
-from ml_genn.callbacks import Checkpoint, SpikeRecorder, VarRecorder
+from ml_genn.callbacks import Checkpoint, SpikeRecorder, VarRecorder, Callback
 from ml_genn.compilers import EventPropCompiler, InferenceCompiler
 from ml_genn.connectivity import Dense,FixedProbability
 from ml_genn.initializers import Normal
@@ -39,9 +39,9 @@ class EaseInSchedule(Callback):
 p= {
     "NUM_HIDDEN": 256,
     "BATCH_SIZE": 32,
-    "NUM_EPOCHS": 50,
+    "NUM_EPOCHS": 100,
     "GRAD_LIMIT": 100.0,
-    "REG_LAMBDA": 2e-5,
+    "REG_LAMBDA": 1e-5,
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
@@ -163,12 +163,10 @@ for left in spklist:
         # Evaluate model on numpy dataset
         start_time = perf_counter()
         callbacks = [
-            "batch_progress_bar",
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
             Checkpoint(serialiser), EaseInSchedule(),
         ]
         val_callbacks =  [
-            "batch_progress_bar",
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True)
         ]
         early_stop, best_acc = 15, 0
