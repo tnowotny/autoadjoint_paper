@@ -45,7 +45,7 @@ p= {
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
-    "NAME": "FFWD_alif_maass_4",
+    "NAME": "FFWD_alif_tn_4",
     "OUT_DIR": ".",
     "SEED": 345
 }
@@ -99,14 +99,14 @@ init_w_lif = {"in_hid": (0.0015, 0.0005),
               "hid_out": (0.0, 0.03)}
 
 # BALAZS: is the reset of g to e correct? Not g+e?
-alif_tn_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
+alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
                         threshold="v - v_thr",
                         output_var_name="v",
                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
                         var_vals={"v": 0, "g": 0})
 
 # Thomas' version: g is reset to g+e 
-alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "g + e")},
+alif_tn_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "g + e")},
                         threshold="v - v_thr",
                         output_var_name="v",
                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
@@ -146,7 +146,7 @@ with network:
     # Populations
     input = Population(SpikeInput(max_spikes=p["BATCH_SIZE"] * max_spikes),
                        num_input, record_spikes=True)
-    hidden = Population(alif_neuron,
+    hidden = Population(alif_tn_neuron,
                         p["NUM_HIDDEN"], record_spikes=True)
     output = Population(LeakyIntegrate(tau_mem=20.0, readout="avg_var_exp_weight"),
                         num_output, record_spikes=True)
