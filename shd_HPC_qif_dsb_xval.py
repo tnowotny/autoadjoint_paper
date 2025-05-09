@@ -188,8 +188,8 @@ with network:
     # Connections
     Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=0.001, sd=0.0003)),
                Exponential(5.0))
-    Conn_Pop1_Pop1 = Connection(hidden, hidden, Dense(Normal(mean=0.0, sd=0.02)),
-               Exponential(5.0))
+    #Conn_Pop1_Pop1 = Connection(hidden, hidden, Dense(Normal(mean=0.0, sd=0.02)),
+    #           Exponential(5.0))
     Connection(hidden, output, Dense(Normal(mean=0.0, sd=0.03)),
                Exponential(5.0))
 
