@@ -45,7 +45,7 @@ p= {
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
-    "NAME": "FFWD_alif_4",
+    "NAME": "FFWD_alif_maass_4",
     "OUT_DIR": ".",
     "SEED": 345
 }
@@ -98,12 +98,30 @@ lif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v", "c")},
 init_w_lif = {"in_hid": (0.0015, 0.0005),
               "hid_out": (0.0, 0.03)}
 
-
-alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
+# BALAZS: is the reset of g to e correct? Not g+e?
+alif_tn_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
                         threshold="v - v_thr",
                         output_var_name="v",
                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
                         var_vals={"v": 0, "g": 0})
+
+# Thomas' version: g is reset to g+e 
+alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "g + e")},
+                        threshold="v - v_thr",
+                        output_var_name="v",
+                        param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
+                        var_vals={"v": 0, "g": 0})
+
+# alif neuron from Maass, "Spike frequency adaptation supports network computations on temporally dispersed information", eLife
+# taum = 20
+# vth on the order of 10-30 
+# tau_a = 1200, beta= 3; tau_a = 2000, beta = 1
+alif_maass_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v", "c"), "g":("-g / tau", "g+e")},
+                        threshold="v - v_thr - g",
+                        output_var_name="v",
+                        param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.1, "tau": 200, "v_thr": 1},
+                        var_vals={"v": 0, "g": 0})
+
 
 
 # raf doesn'work currently (maybe just bad parameter choices)
