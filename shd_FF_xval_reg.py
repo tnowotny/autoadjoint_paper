@@ -59,6 +59,8 @@ if len(sys.argv) > 1:
         p[name]= value
     
 print(p)
+with open(f"{p['NAME']}_run.json","w") as f:
+    json.dump(p,f,indent=4)
 
 np.random.seed(p["SEED"])
 
