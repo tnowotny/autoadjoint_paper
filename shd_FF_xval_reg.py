@@ -41,7 +41,7 @@ p= {
     "BATCH_SIZE": 32,
     "NUM_EPOCHS": 100,
     "GRAD_LIMIT": 100.0,
-    "REG_LAMBDA": 5e-6,
+    "REG_LAMBDA": 5e-7,
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
@@ -90,58 +90,61 @@ num_output = len(dataset.classes)
 
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
 
-lif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v", "c")},
-                        threshold="v - v_thr",
-                        output_var_name="v",
-                        param_vals={"a": 0, "b": 1/20, "c": 0, "v_thr": 1},
-                        var_vals={"v": 0})
 
-# initial weight values for LIF:
-init_w_lif = {"in_hid": (0.0015, 0.0005),
-              "hid_out": (0.0, 0.03)}
-
-# BALAZS: is the reset of g to e correct? Not g+e?
-alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
-                        threshold="v - v_thr",
-                        output_var_name="v",
-                        param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
-                        var_vals={"v": 0, "g": 0})
-
-# Thomas' version: g is reset to g+e 
-alif_tn_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "g + e")},
-                        threshold="v - v_thr",
-                        output_var_name="v",
-                        param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
-                        var_vals={"v": 0, "g": 0})
-
+neurons= {
+"if": UserNeuron(vars={"v": ("Isyn", "c")},
+                 threshold="v - v_thr",
+                 output_var_name="v",
+                 param_vals={"c": 0, "v_thr": 1},
+                 var_vals={"v": 0}),
+"lif": UserNeuron(vars={"v": ("Isyn + a - b * v", "c")},
+                  threshold="v - v_thr",
+                  output_var_name="v",
+                  param_vals={"a": 0, "b": 1/20, "c": 0, "v_thr": 1},
+                  var_vals={"v": 0}),
+"alif_balazs": UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
+                          threshold="v - v_thr",
+                          output_var_name="v",
+                          param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
+                          var_vals={"v": 0, "g": 0}),
+alif_thomas:  UserNeuron(vars={"v": ("Isyn + a - b * v + b * g * (d - v)", "c"), "g":("-g / tau", "g + e")},
+                         threshold="v - v_thr",
+                         output_var_name="v",
+                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
+                         var_vals={"v": 0, "g": 0}),
 # alif neuron from Maass, "Spike frequency adaptation supports network computations on temporally dispersed information", eLife
 # taum = 20
 # vth on the order of 10-30 
 # tau_a = 1200, beta= 3; tau_a = 2000, beta = 1
-alif_maass_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v", "c"), "g":("-g / tau", "g+e")},
-                        threshold="v - v_thr - g",
-                        output_var_name="v",
-                        param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.1, "tau": 200, "v_thr": 1},
-                        var_vals={"v": 0, "g": 0})
-
-
-
+"alif_maass": UserNeuron(vars={"v": ("Isyn + a - b * v", "c"), "g":("-g / tau", "g+e")},
+                         threshold="v - v_thr - g",
+                         output_var_name="v",
+                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.1, "tau": 200, "v_thr": 1},
+                         var_vals={"v": 0, "g": 0}),
 # raf doesn'work currently (maybe just bad parameter choices)
-raf_neuron = UserNeuron(vars={"x": ("Isyn + b * x - w * y", "0"), "y": ("w * x + b * y", "1")},
-                        threshold="y - a_thresh",
-                        output_var_name="x",
-                        param_vals={"b":-1, "w": 10, "a_thresh":1},
-                        var_vals={"x":0, "y":0})
+"raf": UserNeuron(vars={"x": ("Isyn + b * x - w * y", "0"), "y": ("w * x + b * y", "1")},
+                  threshold="y - a_thresh",
+                  output_var_name="x",
+                  param_vals={"b":-1, "w": 10, "a_thresh":1},
+                  var_vals={"x":0, "y":0}),
+"qif": UserNeuron(vars={"v": ("(v*(v-v_c) + Isyn) / tau_mem", "0.0")},
+                  threshold="v - 1.0",
+                  output_var_name="v",
+                  param_vals={"tau_mem": 20.0, "v_c": 0.5},
+                  var_vals={"v": 0.0}),
+}
 
-qif_neuron = UserNeuron(vars={"v": ("(v*(v-v_c) + Isyn) / tau_mem", "0.0")},
-                        threshold="v - 1.0",
-                        output_var_name="v",
-                        param_vals={"tau_mem": 20.0, "v_c": 0.5},
-                        var_vals={"v": 0.0})
-
-# initial weight values for QIF:
-init_w_qif = {"in_hid": (0.03, 0.01),
-              "hid_out": (0.0, 0.03)}
+init_vals = {
+    # initial weight values for LIF:
+    "lif": {"in_hid": (0.0015, 0.0005),
+            "hid_out": (0.0, 0.03)},
+    # initial weight values for QIF:
+    "qif": {"in_hid": (0.03, 0.01),
+            "hid_out": (0.0, 0.03)},
+    # default values:
+    "default": {"in_hid": (0.03, 0.01),
+                "hid_out": (0.0, 0.03)},
+}
 
 network = Network()
 with network:
