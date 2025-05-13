@@ -37,17 +37,18 @@ class EaseInSchedule(Callback):
 #logging.basicConfig(level=logging.DEBUG)
 
 p= {
-    "NUM_HIDDEN": 256,
+    "NUM_HIDDEN": 32,
     "BATCH_SIZE": 32,
     "NUM_EPOCHS": 100,
     "GRAD_LIMIT": 100.0,
-    "REG_LAMBDA": 5e-7,
+    "REG_LAMBDA": 5e-6,
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
-    "NAME": "FFWD_alif_tn_4",
+    "NAME": "FFWD_maass_4",
     "OUT_DIR": ".",
-    "SEED": 345
+    "SEED": 345,
+    "HIDDEN_NEURONS": "alif_maass"
 }
 
 if len(sys.argv) > 1:
@@ -102,12 +103,14 @@ neurons= {
                   output_var_name="v",
                   param_vals={"a": 0, "b": 1/20, "c": 0, "v_thr": 1},
                   var_vals={"v": 0}),
+# alif neuron with somewhat unusual setting g to e upon spikes
 "alif_balazs": UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
                           threshold="v - v_thr",
                           output_var_name="v",
                           param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
                           var_vals={"v": 0, "g": 0}),
-alif_thomas:  UserNeuron(vars={"v": ("Isyn + a - b * v + b * g * (d - v)", "c"), "g":("-g / tau", "g + e")},
+# alif with the more common jump of adding g + e
+"alif_thomas":  UserNeuron(vars={"v": ("Isyn + a - b * v + b * g * (d - v)", "c"), "g":("-g / tau", "g + e")},
                          threshold="v - v_thr",
                          output_var_name="v",
                          param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
@@ -136,30 +139,39 @@ alif_thomas:  UserNeuron(vars={"v": ("Isyn + a - b * v + b * g * (d - v)", "c"),
 
 init_vals = {
     # initial weight values for LIF:
+    "if": {"in_hid": (0.0015, 0.0005),
+            "hid_out": (0.0, 0.03)},
     "lif": {"in_hid": (0.0015, 0.0005),
             "hid_out": (0.0, 0.03)},
+    "alif_balazs": {"in_hid": (0.0015, 0.0005),
+                  "hid_out": (0.0, 0.03)},
+    "alif_thomas": {"in_hid": (0.0015, 0.0005),
+                  "hid_out": (0.0, 0.03)},
+    "alif_maass": {"in_hid": (0.0015, 0.0005),
+                  "hid_out": (0.0, 0.03)},
+    "raf": {"in_hid": (0.0015, 0.0005),
+                  "hid_out": (0.0, 0.03)},
     # initial weight values for QIF:
     "qif": {"in_hid": (0.03, 0.01),
             "hid_out": (0.0, 0.03)},
-    # default values:
-    "default": {"in_hid": (0.03, 0.01),
-                "hid_out": (0.0, 0.03)},
 }
 
 network = Network()
+
+hn = p["HIDDEN_NEURONS"]
 with network:
     # Populations
     input = Population(SpikeInput(max_spikes=p["BATCH_SIZE"] * max_spikes),
                        num_input, record_spikes=True)
-    hidden = Population(alif_tn_neuron,
+    hidden = Population(neurons[hn],
                         p["NUM_HIDDEN"], record_spikes=True)
     output = Population(LeakyIntegrate(tau_mem=20.0, readout="avg_var_exp_weight"),
                         num_output, record_spikes=True)
 
     # Connections
-    Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=init_w_lif["in_hid"][0], sd=init_w_lif["in_hid"][1])),
+    Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=init_vals[hn]["in_hid"][0], sd=init_vals[hn]["in_hid"][1])),
                Exponential(5.0))
-    Connection(hidden, output, Dense(Normal(mean=init_w_lif["hid_out"][0], sd=init_w_lif["hid_out"][1])),
+    Connection(hidden, output, Dense(Normal(mean=init_vals[hn]["hid_out"][0], sd=init_vals[hn]["hid_out"][1])),
                Exponential(5.0))
 
 max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
