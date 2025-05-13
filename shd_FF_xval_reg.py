@@ -1,6 +1,6 @@
 import numpy as np
 #import matplotlib.pyplot as plt
-#import mnist
+import copy
 
 from ml_genn import Connection, Network, Population
 from ml_genn.callbacks import Checkpoint, SpikeRecorder, VarRecorder, Callback
@@ -34,6 +34,23 @@ class EaseInSchedule(Callback):
             else:
                 optimiser.alpha = 0.001
 
+class Shift:
+    def __init__(self, f_shift, sensor_size):
+        self.f_shift = f_shift
+        self.sensor_size = sensor_size
+
+    def __call__(self, events: np.ndarray) -> np.ndarray:
+        # Shift events
+        events_copy = copy.deepcopy(events)
+        events_copy["x"] = events_copy["x"] + np.random.randint(-self.f_shift, self.f_shift)
+
+        # Delete out of bound events
+        events_copy = np.delete(
+            events_copy,
+            np.where(
+                (events_copy["x"] < 0) | (events_copy["x"] >= self.sensor_size[0])))
+        return events_copy
+
 #logging.basicConfig(level=logging.DEBUG)
 
 p= {
@@ -48,7 +65,8 @@ p= {
     "NAME": "FFWD_maass_4",
     "OUT_DIR": ".",
     "SEED": 345,
-    "HIDDEN_NEURONS": "alif_maass"
+    "HIDDEN_NEURONS": "alif_maass",
+    "AUGMENT_SHIFT": 40.0
 }
 
 if len(sys.argv) > 1:
@@ -67,21 +85,17 @@ np.random.seed(p["SEED"])
 
 # Get SHD dataset
 dataset = SHD(save_to='../data', train=True)
-
-# Preprocess
-spikes = []
-labels = []
-for i in range(len(dataset)):
-    events, label = dataset[i]
-    spikes.append(preprocess_tonic_spikes(events, dataset.ordering,
-                                          dataset.sensor_size))
-    labels.append(label)
 speakers = dataset.speaker
 spklist = np.unique(speakers)
 
 # Determine max spikes and latest spike time
-max_spikes = calc_max_spikes(spikes)
-latest_spike_time = calc_latest_spike_time(spikes)
+# calculate an estimate for max_spikes in input neurons
+max_spikes = 0
+latest_spike_time = 0
+for events, label in dataset:
+    events = np.delete(events, np.where(events["t"] >= 1000000))
+    max_spikes = max(max_spikes, len(events))
+    latest_spike_time = max(latest_spike_time, np.amax(events["t"]) / 1000.0)
 print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 
 # Get number of input and output neurons from dataset 
@@ -91,6 +105,8 @@ num_output = len(dataset.classes)
 
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
 
+# make augmentations
+shift = Shift(p["AUGMENT_SHIFT"], dataset.sensor_size)
 
 neurons= {
 "if": UserNeuron(vars={"v": ("Isyn", "c")},
@@ -195,11 +211,23 @@ resfile.write(f"# Speaker_left Epoch hidden_n_zero mean_hidden_mean_spike std_hi
 resfile.close()
 
 for left in spklist:
-    train_spikes = [spikes[i] for i in np.where(speakers != left)[0]]
-    train_labels = [labels[i] for i in np.where(speakers != left)[0]]
-    val_spikes = [spikes[i] for i in np.where(speakers == left)[0]]
-    val_labels = [labels[i] for i in np.where(speakers == left)[0]]
-    print(f"Leave speaker {left}: training with {len(train_spikes)} examples and validating with {len(val_spikes)}.") 
+    # Preprocess
+    spikes_train = []
+    labels_train = []
+    spikes_val = []
+    labels_val = []
+    for i in range(len(dataset)):
+        events, label = dataset[i]
+        if speakers[i] != left:
+            spikes_train.append(preprocess_tonic_spikes(shift(events), dataset.ordering,
+                                                        dataset.sensor_size))
+            labels_train.append(label)
+        else:
+            spikes_val.append(preprocess_tonic_spikes(shift(events), dataset.ordering,
+                                                      dataset.sensor_size))
+            labels_val.append(label)
+        
+    print(f"Leave speaker {left}: training with {len(spikes_train)} examples and validating with {len(spikes_val)}.") 
     compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
     with compiled_net:
         # Evaluate model on numpy dataset
@@ -213,10 +241,10 @@ for left in spklist:
         ]
         early_stop, best_acc = 15, 0
         for e in range(p["NUM_EPOCHS"]):
-            metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: train_spikes},
-                                                                             {output: train_labels},
-                                                                             validation_x={input: val_spikes},
-                                                                             validation_y={output: val_labels},
+            metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: spikes_train},
+                                                                             {output: labels_train},
+                                                                             validation_x={input: spikes_val},
+                                                                             validation_y={output: labels_val},
                                                                              num_epochs=1, shuffle=True,
                                                                              callbacks=callbacks,
                                                                              validation_callbacks=val_callbacks)
