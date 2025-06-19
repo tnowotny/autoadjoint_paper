@@ -90,8 +90,10 @@ alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g"
 raf_neuron = UserNeuron(vars={"x": ("Isyn + b * x - w * y", "0"), "y": ("w * x + b * y", "1")},
                         threshold="y - a_thresh",
                         output_var_name="x",
-                        param_vals={"b":-1, "w": 10, "a_thresh":1},
-                        var_vals={"x":0, "y":0})
+                        param_vals={"b":-1, "w": 1, "a_thresh":1},
+                        var_vals={"x":0, "y":0},
+                        sub_steps=1000
+)
 
 qif_neuron = UserNeuron(vars={"v": ("(v*(v-v_c) + Isyn) / tau_mem", "0.0")},
                         threshold="v - 1.0",
@@ -107,7 +109,7 @@ with network:
     # Populations
     input = Population(SpikeInput(max_spikes=p["BATCH_SIZE"] * max_spikes),
                        num_input, record_spikes=True)
-    hidden = Population(qif_neuron,
+    hidden = Population(raf_neuron,
                         p["NUM_HIDDEN"], record_spikes=True)
     output = Population(LeakyIntegrate(tau_mem=20.0, readout="avg_var_exp_weight"),
                         num_output, record_spikes=True)

@@ -54,19 +54,22 @@ class Shift:
 #logging.basicConfig(level=logging.DEBUG)
 
 p= {
-    "NUM_HIDDEN": 32,
+    "NUM_HIDDEN": 64,
     "BATCH_SIZE": 32,
-    "NUM_EPOCHS": 100,
+    "NUM_EPOCHS": 300,
     "GRAD_LIMIT": 100.0,
-    "REG_LAMBDA": 5e-6,
+    "REG_LAMBDA": 1e-5,
     "REG_NU_UPPER": 14,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
-    "NAME": "FFWD_maass_4",
+    "NAME": "FFWD_raf_1",
     "OUT_DIR": ".",
     "SEED": 345,
-    "HIDDEN_NEURONS": "alif_maass",
-    "AUGMENT_SHIFT": 40.0
+    "HIDDEN_NEURONS": "raf",
+    "AUGMENT_SHIFT": 40.0,
+    "TAU_A_MIN": 25,
+    "TAU_A_MAX": 500,
+    "DEBUG_MODE": True
 }
 
 if len(sys.argv) > 1:
@@ -123,13 +126,13 @@ neurons= {
 "alif_balazs": UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
                           threshold="v - v_thr",
                           output_var_name="v",
-                          param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
+                          param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": np.random.uniform(low=p["TAU_A_MIN"],high=p["TAU_A_MAX"],size=p["NUM_HIDDEN"]), "v_thr": 1},
                           var_vals={"v": 0, "g": 0}),
 # alif with the more common jump of adding g + e
 "alif_thomas":  UserNeuron(vars={"v": ("Isyn + a - b * v + b * g * (d - v)", "c"), "g":("-g / tau", "g + e")},
                          threshold="v - v_thr",
                          output_var_name="v",
-                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 200, "v_thr": 1},
+                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": np.random.uniform(low=p["TAU_A_MIN"],high=p["TAU_A_MAX"],size=p["NUM_HIDDEN"]), "v_thr": 1},
                          var_vals={"v": 0, "g": 0}),
 # alif neuron from Maass, "Spike frequency adaptation supports network computations on temporally dispersed information", eLife
 # taum = 20
@@ -138,14 +141,15 @@ neurons= {
 "alif_maass": UserNeuron(vars={"v": ("Isyn + a - b * v", "c"), "g":("-g / tau", "g+e")},
                          threshold="v - v_thr - g",
                          output_var_name="v",
-                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.1, "tau": 200, "v_thr": 1},
+                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.1, "tau": np.random.uniform(low=p["TAU_A_MIN"],high=p["TAU_A_MAX"],size=p["NUM_HIDDEN"]), "v_thr": 1},
                          var_vals={"v": 0, "g": 0}),
 # raf doesn'work currently (maybe just bad parameter choices)
 "raf": UserNeuron(vars={"x": ("Isyn + b * x - w * y", "0"), "y": ("w * x + b * y", "1")},
                   threshold="y - a_thresh",
                   output_var_name="x",
-                  param_vals={"b":-1, "w": 10, "a_thresh":1},
-                  var_vals={"x":0, "y":0}),
+                  param_vals={"b":-1, "w": 1, "a_thresh":1},
+                  var_vals={"x":0, "y":0},
+                  sub_steps=100),
 "qif": UserNeuron(vars={"v": ("(v*(v-v_c) + Isyn) / tau_mem", "0.0")},
                   threshold="v - 1.0",
                   output_var_name="v",
@@ -154,7 +158,6 @@ neurons= {
 }
 
 init_vals = {
-    # initial weight values for LIF:
     "if": {"in_hid": (0.0015, 0.0005),
             "hid_out": (0.0, 0.03)},
     "lif": {"in_hid": (0.0015, 0.0005),
@@ -164,10 +167,11 @@ init_vals = {
     "alif_thomas": {"in_hid": (0.0015, 0.0005),
                   "hid_out": (0.0, 0.03)},
     "alif_maass": {"in_hid": (0.0015, 0.0005),
+                   "hid_hid": (0.03, 0.01),
                   "hid_out": (0.0, 0.03)},
-    "raf": {"in_hid": (0.0015, 0.0005),
+    "raf": {"in_hid": (0.015, 0.005),
+                   "hid_hid": (0.0, 0.001),
                   "hid_out": (0.0, 0.03)},
-    # initial weight values for QIF:
     "qif": {"in_hid": (0.03, 0.01),
             "hid_out": (0.0, 0.03)},
 }
@@ -181,13 +185,17 @@ with network:
                        num_input, record_spikes=True)
     hidden = Population(neurons[hn],
                         p["NUM_HIDDEN"], record_spikes=True)
+    hidden2 = Population(neurons["lif"],
+                        p["NUM_HIDDEN"], record_spikes=True)
     output = Population(LeakyIntegrate(tau_mem=20.0, readout="avg_var_exp_weight"),
                         num_output, record_spikes=True)
 
     # Connections
     Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=init_vals[hn]["in_hid"][0], sd=init_vals[hn]["in_hid"][1])),
-               Exponential(5.0))
-    Connection(hidden, output, Dense(Normal(mean=init_vals[hn]["hid_out"][0], sd=init_vals[hn]["hid_out"][1])),
+                                Exponential(5.0))
+    Conn_Pop1_Pop2 = Connection(hidden, hidden2, Dense(Normal(mean=init_vals[hn]["hid_hid"][0], sd=init_vals[hn]["hid_hid"][1])),
+                                Exponential(5.0))
+    Connection(hidden2, output, Dense(Normal(mean=init_vals[hn]["hid_out"][0], sd=init_vals[hn]["hid_out"][1])),
                Exponential(5.0))
 
 max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
@@ -234,6 +242,7 @@ for left in spklist:
         start_time = perf_counter()
         callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
+            SpikeRecorder(hidden2, key="spikes_hidden2",record_counts=True),
             Checkpoint(serialiser), EaseInSchedule(),
         ]
         val_callbacks =  [
@@ -250,6 +259,8 @@ for left in spklist:
                                                                              validation_callbacks=val_callbacks)
             n0 = np.asarray(cb_data['spikes_hidden'])
             mean_n0 = np.mean(n0, axis = 0)
+            n1 = np.asarray(cb_data['spikes_hidden'])
+            mean_n1 = np.mean(n0, axis = 0)
             std_n0 = np.std(n0, axis = 0)
             n0_val = np.asarray(val_cb_data['spikes_hidden'])
             mean_n0_val = np.mean(n0_val, axis = 0)
@@ -268,6 +279,11 @@ for left in spklist:
             hidden_sg.vars["weight"].pull_from_device()
             g_view = hidden_sg.vars["weight"].view.reshape((num_input, p["NUM_HIDDEN"]))
             g_view[:,mean_n0==0] += 0.002
+            hidden_sg.vars["weight"].push_to_device()            
+            hidden_sg = compiled_net.connection_populations[Conn_Pop1_Pop2]
+            hidden_sg.vars["weight"].pull_from_device()
+            g_view = hidden_sg.vars["weight"].view.reshape((p["NUM_HIDDEN"], p["NUM_HIDDEN"]))
+            g_view[:,mean_n1==0] += 0.002
             hidden_sg.vars["weight"].push_to_device()            
         compiled_net.save_connectivity((left,), serialiser)
         end_time = perf_counter()

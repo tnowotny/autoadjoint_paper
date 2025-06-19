@@ -28,14 +28,27 @@ ht = plotN // wd +1
 
 fig, ax = plt.subplots(ht, wd, sharex=True)
 
+plotx = []
+splits = []
+for k in range (len(d)):
+    split = np.where(np.diff(d[k][:,1]) < 0)
+    x = [0]+list(split[0])
+    the_x = []
+    for i in range(len(x)-1):
+        the_x.append(np.arange(x[i+1]-x[i])+i*max_epoch)
+    plotx.append(the_x)
+    splits.append(x)
+
+print(plotx)
+
 for y in range(ht):
     for x in range(wd):
         i = y*wd+x
         if i < plotN:
             for k in range (len(d)):
-                plotx = x_axis[k][:d[k].shape[0]]+d[k][:,1]
-                for j in range(10):
-                    ax[y,x].plot(plotx[j*epochs[k]:(j+1)*epochs[k]],d[k][j*epochs[k]:(j+1)*epochs[k],i],color=f"C{k}",lw=1)
+                for j in range(len(splits[k])-1):
+                    print(f"d[{k}][{splits[k][j]+1}:{splits[k][j+1]+1}]")
+                    ax[y,x].plot(plotx[k][j],d[k][splits[k][j]+1:splits[k][j+1]+1,i],color=f"C{k}",lw=1)
                 
             ax[y,x].set_title(labels[0][i])
         if i == plotN - 1:
