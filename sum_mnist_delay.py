@@ -73,7 +73,8 @@ p= {
     "IN_DELAY": 0.0,
     "N_TRAIN": 100000,
     "N_VAL": 10000,
-    "N_TEST": 50000
+    "N_TEST": 50000,
+    "R_NOISE": 0.001
 }
 
 if len(sys.argv) == 2:
@@ -108,9 +109,9 @@ with open(f"{p['NAME']}_run.json","w") as f:
 # load data
 labels_train, images_train, labels_val, images_val, labels_test, images_test = load_MNIST_data(p["N_TRAIN"],p["N_VAL"])
 # generate data
-t_train, id_train, lab_train = generate_latency_MNIST_sum_examples(p["N_TRAIN"],images_train,labels_train,p["IN_DELAY"])
-t_val, id_val, lab_val = generate_latency_MNIST_sum_examples(p["N_VAL"],images_val,labels_val,p["IN_DELAY"])
-t_test, id_test, lab_test = generate_latency_MNIST_sum_examples(p["N_VAL"],images_test,labels_test,p["IN_DELAY"])
+t_train, id_train, lab_train = generate_latency_MNIST_sum_examples(p["N_TRAIN"],images_train,labels_train,p["IN_DELAY"],r_noise=p["R_NOISE"])
+t_val, id_val, lab_val = generate_latency_MNIST_sum_examples(p["N_VAL"],images_val,labels_val,p["IN_DELAY"],r_noise=p["R_NOISE"])
+t_test, id_test, lab_test = generate_latency_MNIST_sum_examples(p["N_VAL"],images_test,labels_test,p["IN_DELAY"],r_noise=p["R_NOISE"])
 
 # Determine max spikes and latest spike time
 # calculate an estimate for max_spikes in input neurons
@@ -290,7 +291,7 @@ with compiled_net:
             
     for e in range(p["NUM_EPOCHS"]):
         # fresh training data each epoch to achieve good sampling
-        t_train, id_train, lab_train = generate_latency_MNIST_sum_examples(p["N_TRAIN"],images_train,labels_train,p["IN_DELAY"])
+        t_train, id_train, lab_train = generate_latency_MNIST_sum_examples(p["N_TRAIN"],images_train,labels_train,p["IN_DELAY"],r_noise = p["R_NOISE"])
         spikes_train = []
         for t, ids in zip(t_train, id_train):
             spikes_train.append(preprocess_spikes(t, ids, num_input))

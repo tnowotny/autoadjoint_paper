@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import mnist
 
 
-def fill_Poisson(t0, t1, d, x, p, r):
+def fill_Poisson_events(t0, t1, d, x, p, r):
     """
     fill a list d with tuples (t,x,p) where t0 < t < t1 are Poisson spike times
     with rate r
@@ -33,6 +33,23 @@ def fill_Poisson(t0, t1, d, x, p, r):
         if t+ts < t1:
             t = t+ts
             d.append((t*1000.0,x,p))
+        else:
+            done = True
+    return d
+
+def fill_Poisson_list(t0, t1, r):
+    """
+    fill a list d with tuples (t,x,p) where t0 < t < t1 are Poisson spike times
+    with rate r
+    """
+    t = t0
+    done = False
+    d = []
+    while not done:
+        ts = np.random.exponential(scale=1./r)
+        if t+ts < t1:
+            t = t+ts
+            d.append(t)
         else:
             done = True
     return d
@@ -55,13 +72,13 @@ def generate_diag_digit_data(T, t_digit, l_low, l_high, num_per_class, bits, plo
             print(bit_array)
             for x,b in enumerate(bit_array):
                 lbd = l_high if b == 1 else l_low
-                d = fill_Poisson(0,t_digit,d,2*x,p,l_low)
-                d = fill_Poisson(t_digit,2*t_digit,d,2*x,p,lbd)
-                d = fill_Poisson(2*t_digit,T,d,2*x,p,l_low)
+                d = fill_Poisson_events(0,t_digit,d,2*x,p,l_low)
+                d = fill_Poisson_events(t_digit,2*t_digit,d,2*x,p,lbd)
+                d = fill_Poisson_events(2*t_digit,T,d,2*x,p,l_low)
                 
-                d = fill_Poisson(0,T-2*t_digit,d,2*x+1,p,l_low)
-                d = fill_Poisson(T-2*t_digit,T-t_digit,d,2*x+1,p,lbd)
-                d = fill_Poisson(T-t_digit,T,d,2*x+1,p,l_low)
+                d = fill_Poisson_events(0,T-2*t_digit,d,2*x+1,p,l_low)
+                d = fill_Poisson_events(T-2*t_digit,T-t_digit,d,2*x+1,p,lbd)
+                d = fill_Poisson_events(T-t_digit,T,d,2*x+1,p,l_low)
             data.append((np.array(d,dtype=mytype),c))
             if (plot):
                 plt.figure()
@@ -88,13 +105,13 @@ def generate_diag_xor_data(T, t_digit, l_low, l_high, num_per_class, plot=False)
             c = 1 if front*back == 0 and front+back > 0 else 0
             for k in range(num_per_class):
                 d = []
-                d = fill_Poisson(0,t_digit,d,0,p,l_low)
-                d = fill_Poisson(t_digit,2*t_digit,d,0,p,r[front])
-                d = fill_Poisson(2*t_digit,T,d,0,p,l_low)
+                d = fill_Poisson_events(0,t_digit,d,0,p,l_low)
+                d = fill_Poisson_events(t_digit,2*t_digit,d,0,p,r[front])
+                d = fill_Poisson_events(2*t_digit,T,d,0,p,l_low)
                 
-                d = fill_Poisson(0,T-2*t_digit,d,1,p,l_low)
-                d = fill_Poisson(T-2*t_digit,T-t_digit,d,1,p,r[back])
-                d = fill_Poisson(T-t_digit,T,d,1,p,l_low)
+                d = fill_Poisson_events(0,T-2*t_digit,d,1,p,l_low)
+                d = fill_Poisson_events(T-2*t_digit,T-t_digit,d,1,p,r[back])
+                d = fill_Poisson_events(T-t_digit,T,d,1,p,l_low)
                 data.append((np.array(d,dtype=mytype),c))
                 if (plot):
                     plt.figure()
@@ -149,7 +166,7 @@ thresh: threshold value for the pixel colour to generate a spike
 plot: whether to make an example diagnostic plot
 """
 
-def generate_latency_MNIST_sum_examples(N_ex, images, labels, delay, min_time= 0.0, max_time= 30.0, thresh= 1, plot= False):
+def generate_latency_MNIST_sum_examples(N_ex, images, labels, delay, min_time= 0.0, max_time= 30.0, thresh= 1, r_noise= 0.0, plot= False):
     # make the paired data
     t = []
     ids = []
@@ -172,8 +189,19 @@ def generate_latency_MNIST_sum_examples(N_ex, images, labels, delay, min_time= 0
         # Calculate spike times
         times2= (((255.0 - spike_pixels) / 255.0) * time_range) + min_time + delay
         sids2 = np.where(spike_vector.flatten())[0]+784
-        t.append(np.hstack([times,times2]))
-        ids.append(np.hstack([sids,sids2]))
+        noise = []
+        noise_id = []
+        if r_noise > 0.0:
+            #for id in range(2*784):
+            #    noise.append(fill_Poisson_list(0.0,delay+max_time, r_noise))
+            #    noise_id.append([id]*len(noise[-1]))
+            rng = np.random.default_rng()
+            n_noise = int(2*784*r_noise*(delay+max_time))
+            noise= rng.uniform(0.0, delay+max_time, n_noise)
+            noise_id= rng.integers(0, 2*784, n_noise)
+        t.append(np.hstack([times,times2,noise]))
+        the_id = np.hstack([list(sids),list(sids2),noise_id])
+        ids.append(the_id.astype(int))
         lab.append(labels[i[0]]+labels[i[1]])
         #print(t[-1])
         #print(ids[-1])
