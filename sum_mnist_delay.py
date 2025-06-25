@@ -67,14 +67,18 @@ p= {
     "NAME": "",
     "OUT_DIR": ".",
     "SEED": 345,
-    "HIDDEN_NEURONS": "lif",
+    "HIDDEN_NEURONS": "raf_bohte",
     "TAU_A_MIN": 25,
     "TAU_A_MAX": 500,
-    "IN_DELAY": 0.0,
+    "IN_DELAY": 90.0,
     "N_TRAIN": 100000,
     "N_VAL": 10000,
     "N_TEST": 50000,
-    "R_NOISE": 0.001
+    "R_NOISE": 0.001,
+    "MIN_W_RAF": 0.065,
+    "MAX_W_RAF": 0.075,
+    "MIN_B_RAF": -0.01,
+    "MAX_B_RAF": 0.01
 }
 
 if len(sys.argv) == 2:
@@ -138,8 +142,8 @@ num_output = 20
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
 
 
-w_bohte = np.random.uniform(0.002,0.01,p["NUM_HIDDEN"])
-b_bohte = np.random.uniform(-0.01,0.01,p["NUM_HIDDEN"])
+w_bohte = np.random.uniform(p["MIN_W_RAF"],p["MAX_W_RAF"],p["NUM_HIDDEN"])
+b_bohte = np.random.uniform(p["MIN_B_RAF"],p["MAX_B_RAF"],p["NUM_HIDDEN"])
 #b_bohte = 100*(-1+np.sqrt(1-(0.1*w_bohte)**2))/0.1
 if DEBUG_MODE:
     print(w_bohte)
@@ -214,7 +218,7 @@ init_vals = {
                   "hid_out": (0.0, 0.03)},
     "raf": {"in_hid": (0.03, 0.01),
                   "hid_out": (0.0, 0.03)},
-    "raf_bohte": {"in_hid": (0.1, 0.05),
+    "raf_bohte": {"in_hid": (0.0, 0.004),
                   "hid_out": (0.0, 0.03)},
     "qif": {"in_hid": (0.03, 0.01),
             "hid_out": (0.0, 0.03)},
@@ -267,8 +271,8 @@ with compiled_net:
         callbacks = [
             SpikeRecorder(input, key="spikes_input", example_filter=[ 0, 1]),
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
-            #VarRecorder(hidden, "x", key="x_hidden", neuron_filter=[0,1], example_filter=0),
-            #VarRecorder(hidden, "y", key="y_hidden", neuron_filter=[0,1], example_filter=0),
+            VarRecorder(hidden, "x", key="x_hidden", neuron_filter=[0,1], example_filter=0),
+            VarRecorder(hidden, "y", key="y_hidden", neuron_filter=[0,1], example_filter=0),
             Checkpoint(serialiser), EaseInSchedule(),
         ]
         val_callbacks = [
@@ -330,7 +334,6 @@ with compiled_net:
             plt.figure()
             plt.scatter(t_spk, id_spk, s=1, marker="|")
             plt.title(f"input batch={xBATCH} epoch={e}")
-            """
             plt.figure()
             x = np.asarray(cb_data['x_hidden'])[0,:,0].flatten()
             y = np.asarray(cb_data['y_hidden'])[0,:,0].flatten()
@@ -341,7 +344,6 @@ with compiled_net:
             plt.plot(x)
             plt.plot(y)
             plt.legend(["x hidden","y hidden"]) 
-            """
             
     compiled_net.save_connectivity(serialiser)
     end_time = perf_counter()
