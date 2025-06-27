@@ -60,14 +60,14 @@ p= {
     "BATCH_SIZE": 32,
     "NUM_EPOCHS": 100,
     "GRAD_LIMIT": 100.0,
-    "REG_LAMBDA": 0,
-    "REG_NU_UPPER": 14,
+    "REG_LAMBDA": 1e-9,
+    "REG_NU_UPPER": 1,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
     "NAME": "",
     "OUT_DIR": ".",
     "SEED": 345,
-    "HIDDEN_NEURONS": "raf_bohte",
+    "HIDDEN_NEURONS": "raf_thomas",
     "TAU_A_MIN": 25,
     "TAU_A_MAX": 500,
     "IN_DELAY": 90.0,
@@ -75,10 +75,11 @@ p= {
     "N_VAL": 10000,
     "N_TEST": 50000,
     "R_NOISE": 0.001,
-    "MIN_W_RAF": 0.065,
-    "MAX_W_RAF": 0.075,
+    "MIN_W_RAF": 0.07,
+    "MAX_W_RAF": 0.08,
     "MIN_B_RAF": -0.01,
-    "MAX_B_RAF": 0.01
+    "MAX_B_RAF": -0.001,
+    "W_LIFT": 0.0002
 }
 
 if len(sys.argv) == 2:
@@ -89,6 +90,9 @@ else:
 DEBUG_MODE = False
 # DEBUG_MODE is meant to run only shortly and do some diagnostic plots
 if DEBUG_MODE:
+    p["N_TRAIN"] = 128
+    p["N_VAL"] = 128
+    p["N_TEST"] = 32
     p["NUM_EPOCHS"] = 2
     RECORDING = True
     xBATCH = 0
@@ -189,14 +193,20 @@ neurons= {
                   threshold="y - a_thresh",
                   output_var_name="x",
                   param_vals={"b":-0.1, "w": 0.1, "a_thresh":1},
-                  var_vals={"x":0, "y":0},
+                  var_vals={"x": 0, "y": 0},
                   sub_steps=100),
 # raf according to Bohte. Soft reset and refractory period
 "raf_bohte": UserNeuron(vars={"x": ("Isyn + (b-q) * x - w * y", "x"), "y": ("w * x + (b-q) * y", "y"), "q": ("-gma*q", "q+1")},
                   threshold="y - (a_thresh+q)",
                   output_var_name="x",
-                  param_vals={"b": b_bohte, "w": w_bohte, "a_thresh":1, "gma": -np.log(0.8)},
-                  var_vals={"x":1.0, "y":0.0, "q": 0.0},
+                  param_vals={"b": b_bohte, "w": w_bohte, "a_thresh": 1, "gma": -np.log(0.8)},
+                  var_vals={"x": 0, "y": 0},
+                  sub_steps=100),
+"raf_thomas": UserNeuron(vars={"x": ("Isyn + b * x - w * y", "x"), "y": ("w * x + b * y", "y"), "q": ("-gma*q", "q+1")},
+                  threshold="y - (a_thresh+q)",
+                  output_var_name="y",
+                  param_vals={"b": b_bohte, "w": w_bohte, "a_thresh": 1, "gma": -np.log(0.8)},
+                  var_vals={"x": 0.0, "y": 0.0, "q": 0.0},
                   sub_steps=100),
 "qif": UserNeuron(vars={"v": ("(v*(v-v_c) + Isyn) / tau_mem", "0.0")},
                   threshold="v - 1.0",
@@ -219,6 +229,8 @@ init_vals = {
     "raf": {"in_hid": (0.03, 0.01),
                   "hid_out": (0.0, 0.03)},
     "raf_bohte": {"in_hid": (0.0, 0.004),
+                  "hid_out": (0.0, 0.03)},
+    "raf_thomas": {"in_hid": (0.0, 0.005),
                   "hid_out": (0.0, 0.03)},
     "qif": {"in_hid": (0.03, 0.01),
             "hid_out": (0.0, 0.03)},
@@ -326,7 +338,7 @@ with compiled_net:
         hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
         hidden_sg.vars["weight"].pull_from_device()
         g_view = hidden_sg.vars["weight"].view.reshape((num_input, p["NUM_HIDDEN"]))
-        g_view[:,mean_n0==0] += 0.002
+        g_view[:,mean_n0==0] += p["W_LIFT"]
         hidden_sg.vars["weight"].push_to_device()
         if DEBUG_MODE:
             t_spk = np.asarray(cb_data['spikes_input'][0][xBATCH])
