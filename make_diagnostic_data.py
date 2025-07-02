@@ -39,7 +39,7 @@ def fill_Poisson_events(t0, t1, d, x, p, r):
 
 def fill_Poisson_list(t0, t1, r):
     """
-    fill a list d with tuples (t,x,p) where t0 < t < t1 are Poisson spike times
+    fill a list d with times t where t0 < t < t1 are Poisson spike times
     with rate r
     """
     t = t0
@@ -120,6 +120,53 @@ def generate_diag_xor_data(T, t_digit, l_low, l_high, num_per_class, plot=False)
                     plt.show()
             
     return data
+
+"""
+Different encoding of XOR that is more amenable to SNN processing; 
+There are 4 input neurons, two each for a binary variable: neuron 0 on means 0 and 
+neuron1 on means 1. 
+"""
+
+def generate_xor_data_identity_coding(T, t_digit, l_low, l_high, num_per_class, plot=False):
+    t = []
+    ids = []
+    label = []
+    p = 0
+    r = [ l_low, l_high ]
+    for front in range(2):
+        for back in range(2):
+            c = 1 if front*back == 0 and front+back > 0 else 0
+            for k in range(num_per_class):
+                lt = []
+                lid = []
+                for n in range(4):
+                    if n == 0:
+                        the_r = r[(front+1)%2]
+                        t_signal = t_digit
+                    elif n == 1:
+                        the_r = r[front]
+                        t_signal = t_digit
+                    elif n == 2:
+                        the_r = r[(back+1)%2]
+                        t_signal = T-2*t_digit
+                    elif n == 3:
+                        the_r = r[back]
+                        t_signal = T-2*t_digit
+                    t1 = fill_Poisson_list(0,t_signal,l_low)
+                    t2 = fill_Poisson_list(t_signal,t_signal+t_digit,the_r)
+                    t3 = fill_Poisson_list(t_signal+t_digit,T,l_low)
+                    lt += t1+t2+t3
+                    lid += [n]*(len(t1)+len(t2)+len(t3))
+                t.append(lt)
+                ids.append(lid)
+                label.append(c)
+                if (plot):
+                    plt.figure()
+                    plt.scatter(lt,lid,s=1)
+                    plt.title(f"class {c}")
+                    plt.show()
+            
+    return t, ids, label
 
 
 """
@@ -289,4 +336,5 @@ def generate_latency_MNIST_sum(N_train, N_val, N_test, delay, min_time= 0.0, max
 if __name__ == "__main__":
     #generate_diag_digit_data(1000, 100, 0.01, 0.1, 1, 4, plot=True)
     #generate_diag_xor_data(1000, 100, 0.01, 0.1, 1, plot=True)
-    generate_latency_MNIST_sum(200000, 20000, 100000, 500.0, plot= False)
+    #generate_latency_MNIST_sum(200000, 20000, 100000, 500.0, plot= False)
+    generate_xor_data_identity_coding(60.0, 20.0, 0.1, 1.0, 2, plot=True)

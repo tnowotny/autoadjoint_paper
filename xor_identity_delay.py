@@ -13,11 +13,10 @@ from ml_genn.neurons import LeakyIntegrate, UserNeuron, SpikeInput
 from ml_genn.optimisers import Adam
 from ml_genn.serialisers import Numpy
 from ml_genn.synapses import Exponential
-from make_diagnostic_data import load_MNIST_data, generate_latency_MNIST_sum_examples
+from make_diagnostic_data import generate_xor_data_identity_coding
 
 from time import perf_counter
-from ml_genn.utils.data import (calc_latest_spike_time, calc_max_spikes,
-                                preprocess_spikes)
+from ml_genn.utils.data import preprocess_spikes
 import sys
 import os
 import json
@@ -58,10 +57,10 @@ class Shift:
 p= {
     "NUM_HIDDEN": 1024,
     "BATCH_SIZE": 32,
-    "NUM_EPOCHS": 100,
+    "NUM_EPOCHS": 300,
     "GRAD_LIMIT": 100.0,
-    "REG_LAMBDA": 1e-9,
-    "REG_NU_UPPER": 0,
+    "REG_LAMBDA": 1e-6,
+    "REG_NU_UPPER": 0.0,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
     "NAME": "",
@@ -70,17 +69,22 @@ p= {
     "HIDDEN_NEURONS": "raf_thomas",
     "TAU_A_MIN": 25,
     "TAU_A_MAX": 500,
+    "T_DIGIT": 20.0,
     "IN_DELAY": 90.0,
-    "N_TRAIN": 100000,
-    "N_VAL": 10000,
-    "N_TEST": 50000,
+    "N_TRAIN": 1000,
+    "N_VAL": 100,
+    "N_TEST": 100,
     "R_NOISE": 0.001,
     "MIN_W_RAF": 0.07,
     "MAX_W_RAF": 0.08,
     "MIN_B_RAF": -0.05,
     "MAX_B_RAF": -0.01,
-    "W_LIFT": 0.0002
+    "W_LIFT": 0.0002,
+    "R_LOW": 0.01,
+    "R_HIGH": 0.2
 }
+
+t_total = 3*p["T_DIGIT"]+p["IN_DELAY"]
 
 if len(sys.argv) == 2:
     p["NAME"] = sys.argv[1]
@@ -115,33 +119,29 @@ with open(f"{p['NAME']}_run.json","w") as f:
 
 
 # load data
-labels_train, images_train, labels_val, images_val, labels_test, images_test = load_MNIST_data(p["N_TRAIN"],p["N_VAL"])
 # generate data
-t_train, id_train, lab_train = generate_latency_MNIST_sum_examples(p["N_TRAIN"],images_train,labels_train,p["IN_DELAY"],r_noise=p["R_NOISE"])
-t_val, id_val, lab_val = generate_latency_MNIST_sum_examples(p["N_VAL"],images_val,labels_val,p["IN_DELAY"],r_noise=p["R_NOISE"])
-t_test, id_test, lab_test = generate_latency_MNIST_sum_examples(p["N_VAL"],images_test,labels_test,p["IN_DELAY"],r_noise=p["R_NOISE"])
+t_train, id_train, lab_train = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_TRAIN"])
+t_val, id_val, lab_val = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_VAL"])
+t_test, id_test, lab_test = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_TEST"])
 
 # Determine max spikes and latest spike time
 # calculate an estimate for max_spikes in input neurons
 max_spikes = 0
-latest_spike_time = 0
 for d in [t_train, t_val, t_test]:
     for st in d:
         max_spikes = max(max_spikes, len(st))
-        latest_spike_time = max(latest_spike_time, np.amax(st))
 
 # add a safety margin to max_spikes as we will be regenerating training data
 max_spikes = int(1.5*max_spikes)
 
 # also round the latest spike time for the same reason
-latest_spike_time = np.ceil(latest_spike_time/10.0)*10.0
         
-print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
+print(f"Max spikes {max_spikes}, latest spike time {t_total}")
 
 # Get number of input and output neurons from dataset 
 # and round up outputs to power-of-two
-num_input = 2*28*28
-num_output = 20
+num_input = 4
+num_output = 2
 
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
 
@@ -218,7 +218,7 @@ neurons= {
 init_vals = {
     "if": {"in_hid": (0.0015, 0.0005),
             "hid_out": (0.0, 0.03)},
-    "lif": {"in_hid": (0.06, 0.02),
+    "lif": {"in_hid": (0.12, 0.04),
             "hid_out": (0.0, 0.03)},
     "alif_balazs": {"in_hid": (0.0015, 0.0005),
                   "hid_out": (0.0, 0.03)},
@@ -230,7 +230,7 @@ init_vals = {
                   "hid_out": (0.0, 0.03)},
     "raf_bohte": {"in_hid": (0.0, 0.004),
                   "hid_out": (0.0, 0.03)},
-    "raf_thomas": {"in_hid": (0.0, 0.015),
+    "raf_thomas": {"in_hid": (0.0, 0.07),
                   "hid_out": (0.0, 0.03)},
     "qif": {"in_hid": (0.03, 0.01),
             "hid_out": (0.0, 0.03)},
@@ -256,7 +256,7 @@ with network:
                                             sd=init_vals[hn]["hid_out"][1])),
                Exponential(5.0))
 
-max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
+max_example_timesteps = int(np.ceil(t_total / p["DT"]))
 
 compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              losses="sparse_categorical_crossentropy",
@@ -303,14 +303,14 @@ with compiled_net:
     #early_stop, best_acc = 50, 0
     spikes_val = []
     for t, ids in zip(t_val, id_val):        
-        spikes_val.append(preprocess_spikes(t, ids, num_input))
+        spikes_val.append(preprocess_spikes(np.asarray(t), ids, num_input))
             
     for e in range(p["NUM_EPOCHS"]):
         # fresh training data each epoch to achieve good sampling
-        t_train, id_train, lab_train = generate_latency_MNIST_sum_examples(p["N_TRAIN"],images_train,labels_train,p["IN_DELAY"],r_noise = p["R_NOISE"])
+        t_train, id_train, lab_train = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], 0.001, 0.1, p["N_TRAIN"])
         spikes_train = []
         for t, ids in zip(t_train, id_train):
-            spikes_train.append(preprocess_spikes(t, ids, num_input))
+            spikes_train.append(preprocess_spikes(np.asarray(t), ids, num_input))
         print(f"Training {len(spikes_train)} examples and validating with {len(spikes_val)}")
         metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: spikes_train},
                                                                          {output: lab_train},
