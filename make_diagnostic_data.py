@@ -127,7 +127,7 @@ There are 4 input neurons, two each for a binary variable: neuron 0 on means 0 a
 neuron1 on means 1. 
 """
 
-def generate_xor_data_identity_coding(T, t_digit, l_low, l_high, num_per_class, plot=False):
+def generate_xor_data_identity_coding_Poisson(T, t_digit, l_low, l_high, num_per_class, plot=False):
     t = []
     ids = []
     label = []
@@ -168,6 +168,66 @@ def generate_xor_data_identity_coding(T, t_digit, l_low, l_high, num_per_class, 
             
     return t, ids, label
 
+def pick_spike_times(t0, t1, n, t_refr):
+    fac = 1.0/t_refr
+    lt = np.ones(n)*2*t_refr+t1
+    rng = np.random.default_rng()
+    for i in range(n):
+        while True:
+            x = rng.uniform(t0, t1)
+            #print(x)
+            if np.min(np.abs(lt-x)) > t_refr:
+                break
+        lt[i] = x
+    return list(lt)
+
+        
+def generate_xor_data_identity_coding(T, t_digit, n_spike, t_refr, r_noise, num_per_class, plot=False):
+    t = []
+    ids = []
+    label = []
+    p = 0
+    for front in range(2):
+        for back in range(2):
+            c = 1 if front*back == 0 and front+back > 0 else 0
+            for k in range(num_per_class):
+                lt = []
+                lid = []
+                for n in range(4):
+                    if n == 0:
+                        on = front == 0
+                        t_signal = t_digit
+                    elif n == 1:
+                        on = front == 1
+                        t_signal = t_digit
+                    elif n == 2:
+                        on = back == 0
+                        t_signal = T-2*t_digit
+                    elif n == 3:
+                        on = back == 1
+                        t_signal = T-2*t_digit
+                    if on:
+                        t1 = fill_Poisson_list(0,t_signal,r_noise)
+                        t2 = pick_spike_times(t_signal, t_signal+t_digit, n_spike, t_refr)
+                        t3 = fill_Poisson_list(t_signal+t_digit,T,r_noise)
+                        lt += t1+t2+t3
+                        lid += [n]*(len(t1)+len(t2)+len(t3))
+                    else:
+                        t1 = fill_Poisson_list(0,T,r_noise)
+                        lt += t1
+                        lid += [n]*len(t1)
+                        
+                t.append(lt)
+                ids.append(lid)
+                label.append(c)
+                if (plot):
+                    plt.figure()
+                    plt.scatter(lt,lid,s=1)
+                    plt.title(f"class {c}")
+                    plt.xlim([ 0, T])
+                    plt.show()
+            
+    return t, ids, label
 
 """
 This function creates an MNIST-based delayed adding task. Two MNIST digits are 
@@ -337,4 +397,6 @@ if __name__ == "__main__":
     #generate_diag_digit_data(1000, 100, 0.01, 0.1, 1, 4, plot=True)
     #generate_diag_xor_data(1000, 100, 0.01, 0.1, 1, plot=True)
     #generate_latency_MNIST_sum(200000, 20000, 100000, 500.0, plot= False)
-    generate_xor_data_identity_coding(60.0, 20.0, 0.1, 1.0, 2, plot=True)
+    #generate_xor_data_identity_coding_Poisson(60.0, 20.0, 0.1, 1.0, 2, plot=True)
+    print(pick_spike_times(10, 30, 5, 3))
+    generate_xor_data_identity_coding(60.0, 20.0, 5, 2.0, 0.01, 10, plot=True)

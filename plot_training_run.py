@@ -34,5 +34,7 @@ for y in range(ht):
         if i == plotN - 1:
             ax[y,x].set_ylim([0 ,1])
 
+print(sys.argv[1:])
+ax[0,0].legend(sys.argv[1:])
 plt.show()
 
