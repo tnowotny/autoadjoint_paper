@@ -13,7 +13,7 @@ from ml_genn.neurons import LeakyIntegrate, UserNeuron, SpikeInput
 from ml_genn.optimisers import Adam
 from ml_genn.serialisers import Numpy
 from ml_genn.synapses import Exponential
-from make_diagnostic_data import generate_xor_data_identity_coding
+from make_diagnostic_data import generate_xor_data_identity_coding, generate_xor_data_identity_coding_Poisson
 
 from time import perf_counter
 from ml_genn.utils.data import preprocess_spikes
@@ -81,15 +81,32 @@ p= {
     "MAX_B_RAF": -0.01,
     "W_LIFT": 0.0002,
     "R_LOW": 0.01,
-    "R_HIGH": 0.2
+    "R_HIGH": 0.2,
+    "W_IH_RAF_THOMAS": (0.0, 0.12),
+    "W_HO_RAF_THOMAS": (0.0, 0.03),
+    "DATA_METHOD": "Sample",
+    "N_SPIKE": 5,
+    "T_REFR": 2.0,
+    "W_IH_LIF": (0.12, 0.04),
+    "W_HO_LIF": (0.0, 0.03)
 }
 
 t_total = 3*p["T_DIGIT"]+p["IN_DELAY"]
 
-if len(sys.argv) == 2:
-    p["NAME"] = sys.argv[1]
-else:
+if len(sys.argv) != 2:
     raise Exception(f"usage: {sys.argv[0]} <base name>")
+
+try:
+    fname= f"{sys.argv[1]}.json"
+    with open(fname,"r") as f:
+        p0= json.load(f)        
+    for (name,value) in p0.items():
+        p[name]= value
+except:
+    print("No valid json file found, proceeding with standard settings")
+
+# override naming from JSON file if in conflict with command line
+p["NAME"] = sys.argv[1]
 
 DEBUG_MODE = False
 # DEBUG_MODE is meant to run only shortly and do some diagnostic plots
@@ -103,15 +120,6 @@ if DEBUG_MODE:
 else:
     RECORDING = False
     
-try:
-    fname= f"{sys.argv[1]}.json"
-    with open(fname,"r") as f:
-        p0= json.load(f)
-
-    for (name,value) in p0.items():
-        p[name]= value
-except:
-    print("No json file found, proceeding with standard settings")
 
 print(p)
 with open(f"{p['NAME']}_run.json","w") as f:
@@ -120,10 +128,18 @@ with open(f"{p['NAME']}_run.json","w") as f:
 
 # load data
 # generate data
-t_train, id_train, lab_train = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_TRAIN"])
-t_val, id_val, lab_val = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_VAL"])
-t_test, id_test, lab_test = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_TEST"])
-
+if p["DATA_METHOD"] == "Sample":   
+    t_train, id_train, lab_train = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["N_SPIKE"], p["T_REFR"], p["R_LOW"], p["N_TRAIN"])
+    t_val, id_val, lab_val = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["N_SPIKE"], p["T_REFR"], p["R_LOW"], p["N_VAL"])
+    t_test, id_test, lab_test = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["N_SPIKE"], p["T_REFR"], p["R_LOW"], p["N_TEST"])
+elif p["DATA_METHOD"] == "Poisson":
+    t_tain, id_train, lab_train = generate_xor_data_identity_coding_Poisson(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_TRAIN"])
+    t_val, id_val, lab_val = generate_xor_data_identity_coding_Poisson(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_VAL"])
+    t_test, id_test, lab_test = generate_xor_data_identity_coding_Poisson(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_TEST"])
+else:
+    print(f"Unkown data method {p['DATA_METHOD']}")
+    exit(1)
+    
 # Determine max spikes and latest spike time
 # calculate an estimate for max_spikes in input neurons
 max_spikes = 0
@@ -218,8 +234,8 @@ neurons= {
 init_vals = {
     "if": {"in_hid": (0.0015, 0.0005),
             "hid_out": (0.0, 0.03)},
-    "lif": {"in_hid": (0.12, 0.04),
-            "hid_out": (0.0, 0.03)},
+    "lif": {"in_hid": p["W_IH_LIF"],
+            "hid_out": p["W_HO_LIF"]},
     "alif_balazs": {"in_hid": (0.0015, 0.0005),
                   "hid_out": (0.0, 0.03)},
     "alif_thomas": {"in_hid": (0.0015, 0.0005),
@@ -230,8 +246,8 @@ init_vals = {
                   "hid_out": (0.0, 0.03)},
     "raf_bohte": {"in_hid": (0.0, 0.004),
                   "hid_out": (0.0, 0.03)},
-    "raf_thomas": {"in_hid": (0.0, 0.07),
-                  "hid_out": (0.0, 0.03)},
+    "raf_thomas": {"in_hid": p["W_IH_RAF_THOMAS"],
+                   "hid_out": p["W_HO_RAF_THOMAS"]},
     "qif": {"in_hid": (0.03, 0.01),
             "hid_out": (0.0, 0.03)},
 }
@@ -252,7 +268,7 @@ with network:
     Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=init_vals[hn]["in_hid"][0],
                                                             sd=init_vals[hn]["in_hid"][1])),
                                 Exponential(5.0))
-    Connection(hidden, output, Dense(Normal(mean=init_vals[hn]["hid_out"][0],
+    Conn_Pop1_Pop2 = Connection(hidden, output, Dense(Normal(mean=init_vals[hn]["hid_out"][0],
                                             sd=init_vals[hn]["hid_out"][1])),
                Exponential(5.0))
 
@@ -275,7 +291,12 @@ resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "w")
 resfile.write(f"# Epoch hidden_n_zero mean_hidden_mean_spike std_hidden_mean_spike mean_hidden_std_spikes std_hidden_std_spikes val_hidden_n_zero val_mean_hidden_mean_spike val_std_hidden_mean_spike val_mean_hidden_std_spikes val_std_hidden_std_spikes train_accuracy validation_accuracy\n")
 resfile.close()
 
-compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
+compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}",optimisers={Conn_Pop0_Pop1: {"weight": Adam(0.001*0.001)},
+                                                                                  Conn_Pop1_Pop2: {"weight": Adam(0.001*0.001)},
+                                                                                  hidden: {"b": Adam(0.001*0.001),
+                                                                                           "w": Adam(0.001*0.001)}})
+                                                                                  
+                                                                                  
 with compiled_net:
     # Evaluate model on numpy dataset
     start_time = perf_counter()
@@ -307,7 +328,10 @@ with compiled_net:
             
     for e in range(p["NUM_EPOCHS"]):
         # fresh training data each epoch to achieve good sampling
-        t_train, id_train, lab_train = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], 0.001, 0.1, p["N_TRAIN"])
+        if p["DATA_METHOD"] == "Sample":   
+            t_train, id_train, lab_train = generate_xor_data_identity_coding(t_total,p["T_DIGIT"], p["N_SPIKE"], p["T_REFR"], p["R_LOW"], p["N_TRAIN"])
+        elif p["DATA_METHOD"] == "Poisson":
+            t_train, id_train, lab_train = generate_xor_data_identity_coding_Poisson(t_total,p["T_DIGIT"], p["R_LOW"], p["R_HIGH"], p["N_TRAIN"])
         spikes_train = []
         for t, ids in zip(t_train, id_train):
             spikes_train.append(preprocess_spikes(np.asarray(t), ids, num_input))

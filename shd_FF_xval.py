@@ -31,9 +31,14 @@ p= {
     "GRAD_LIMIT": 100.0,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
-    "NAME": "test",
+    "NAME": "test3",
     "OUT_DIR": ".",
-    "SEED": 345
+    "SEED": 345,
+    "MIN_W_RAF": 0.07,
+    "MAX_W_RAF": 0.08,
+    "MIN_B_RAF": -0.05,
+    "MAX_B_RAF": -0.01,
+    "REG_LAMBDA": 1e-10,
 }
 
 if len(sys.argv) > 1:
@@ -45,8 +50,12 @@ if len(sys.argv) > 1:
         p[name]= value
     
 print(p)
+with open(f"{p['NAME']}_run.json","w") as f:
+    json.dump(p,f,indent=4)
 
 np.random.seed(p["SEED"])
+w_bohte = np.random.uniform(p["MIN_W_RAF"],p["MAX_W_RAF"],p["NUM_HIDDEN"])
+b_bohte = np.random.uniform(p["MIN_B_RAF"],p["MAX_B_RAF"],p["NUM_HIDDEN"])
 
 # Get SHD dataset
 dataset = SHD(save_to='../data', train=True)
@@ -87,12 +96,13 @@ alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g"
                         param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 100, "v_thr": 1},
                         var_vals={"v": 0, "g": 0})
 # raf doesn'work currently (maybe just bad parameter choices)
-raf_neuron = UserNeuron(vars={"x": ("Isyn + b * x - w * y", "0"), "y": ("w * x + b * y", "1")},
-                        threshold="y - a_thresh",
-                        output_var_name="x",
-                        param_vals={"b":-1, "w": 1, "a_thresh":1},
-                        var_vals={"x":0, "y":0},
-                        sub_steps=1000
+raf_neuron = UserNeuron(vars={"x": ("Isyn + b * x - w * y", "x"), "y": ("w * x + b * y", "y"), "q": ("-gma*q", "q+1")},
+                        threshold="y - (a_thresh+q)",
+                        output_var_name="y",
+                        param_vals={"b": b_bohte, "w": w_bohte, "a_thresh": 1, "gma": -np.log(0.8)},
+                        var_vals={"x": 0.0, "y": 0.0, "q": 0.0},
+                        sub_steps=100,
+                        solver="linear_euler"
 )
 
 qif_neuron = UserNeuron(vars={"v": ("(v*(v-v_c) + Isyn) / tau_mem", "0.0")},
@@ -124,12 +134,11 @@ max_example_timesteps = int(np.ceil(latest_spike_time / p["DT"]))
 
 compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
                              losses="sparse_categorical_crossentropy",
-                             reg_lambda=0.0,
+                             reg_lambda= p["REG_LAMBDA"],
                              grad_limit=p["GRAD_LIMIT"],
-                             reg_nu_upper=0.0, max_spikes=1500, 
-                             optimiser=Adam(0.001), batch_size=p["BATCH_SIZE"], 
-                             kernel_profiling=p["KERNEL_PROFILING"],
-                             solver="linear_euler")
+                             reg_nu_upper=14.0, max_spikes=1500, 
+                             batch_size=p["BATCH_SIZE"], 
+                             kernel_profiling=p["KERNEL_PROFILING"])
 
 timefile = open( os.path.join(p["OUT_DIR"], p["NAME"]+"_timing.txt"), "w")
 if p["KERNEL_PROFILING"]:
@@ -146,26 +155,23 @@ for left in spklist:
     val_spikes = [spikes[i] for i in np.where(speakers == left)[0]]
     val_labels = [labels[i] for i in np.where(speakers == left)[0]]
     print(f"Leave speaker {left}: training with {len(train_spikes)} examples and validating with {len(val_spikes)}.") 
-    compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}")
+    compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}", optimisers= {"all_connections": {"weight": Adam(0.001)}, hidden: {"b": Adam(0.001), "w": Adam(0.001)}})
     with compiled_net:
         # Evaluate model on numpy dataset
         start_time = perf_counter()
         callbacks = [
-            "batch_progress_bar",
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
             Checkpoint(serialiser),
         ]
         val_callbacks =  [
-            "batch_progress_bar",
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True)
         ]
-        early_stop, best_acc = 15, 0
         for e in range(p["NUM_EPOCHS"]):
             metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: train_spikes},
                                                                              {output: train_labels},
                                                                              validation_x={input: val_spikes},
                                                                              validation_y={output: val_labels},
-                                                                             num_epochs=1, shuffle=True,
+                                                                             num_epochs=1, start_epoch=e, shuffle=True,
                                                                              callbacks=callbacks,
                                                                              validation_callbacks=val_callbacks)
             n0 = np.asarray(cb_data['spikes_hidden'])
@@ -177,13 +183,6 @@ for left in spklist:
             resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
             resfile.write(f"{left} {e} {np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} {np.std(mean_n0)} {np.mean(std_n0)} {np.std(std_n0)} {np.count_nonzero(mean_n0_val==0)} {np.mean(mean_n0_val)} {np.std(mean_n0_val)} {np.mean(std_n0_val)} {np.std(std_n0_val)} {metrics[output].result} {val_metrics[output].result}\n")
             resfile.close()
-            if metrics[output].result > best_acc:
-                best_acc = metrics[output].result
-                early_stop = 15
-            else:
-                early_stop -= 1
-            if early_stop == 0:
-                break
             hidden_sg = compiled_net.connection_populations[Conn_Pop0_Pop1]
             hidden_sg.vars["weight"].pull_from_device()
             g_view = hidden_sg.vars["weight"].view.reshape((num_input, p["NUM_HIDDEN"]))

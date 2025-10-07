@@ -9,7 +9,7 @@ for k in range(len(sys.argv)-1):
     d.append(np.loadtxt(sys.argv[k+1]))
     epochs.append(int(np.max(d[k][:,1]))+1)
     
-    with open(sys.argv[k-1]) as f:
+    with open(sys.argv[k+1]) as f:
         labels.append(f.readline().strip("\n").split(" "))
         labels[k].pop(0)
 colN = [ d[i].shape[1] for i in range(len(d)) ]
@@ -32,7 +32,8 @@ plotx = []
 splits = []
 for k in range (len(d)):
     split = np.where(np.diff(d[k][:,1]) < 0)
-    x = [0]+list(split[0])
+    x = [0]+list(split[0])+[len(d[k][:,1])-1]
+    print(f"x: {x}")
     the_x = []
     for i in range(len(x)-1):
         the_x.append(np.arange(x[i+1]-x[i])+i*max_epoch)

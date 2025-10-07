@@ -61,10 +61,10 @@ with network:
     hid_out = Connection(hidden, output, Dense(w_hid_out), Exponential(5))
 max_example_timesteps = int(TRIAL_T / DT)
 compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
-                                losses="sparse_categorical_crossentropy",
-                                reg_lambda=0,
-                                reg_nu_upper=1, max_spikes=4, 
-                                optimiser=Adam(0), batch_size=BATCH_SIZE)
+                             losses="sparse_categorical_crossentropy",
+                             reg_lambda=0,
+                             reg_nu_upper=1, max_spikes=4, 
+                             batch_size=BATCH_SIZE)
 compiled_net = compiler.compile(network, optimisers= {hidden: {"tau_mem": Adam(0.01)}})
 
 with compiled_net:
