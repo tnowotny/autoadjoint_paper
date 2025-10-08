@@ -1,6 +1,6 @@
 import numpy as np
 #import matplotlib.pyplot as plt
-#import mnist
+import copy
 
 from ml_genn import Connection, Network, Population
 from ml_genn.callbacks import Checkpoint, SpikeRecorder, VarRecorder
@@ -24,21 +24,42 @@ import logging
 
 #logging.basicConfig(level=logging.DEBUG)
 
+class Shift:
+    def __init__(self, f_shift, sensor_size):
+        self.f_shift = f_shift
+        self.sensor_size = sensor_size
+
+    def __call__(self, events: np.ndarray) -> np.ndarray:
+        # Shift events
+        events_copy = copy.deepcopy(events)
+        events_copy["x"] = events_copy["x"] + np.random.randint(-self.f_shift, self.f_shift)
+
+        # Delete out of bound events
+        events_copy = np.delete(
+            events_copy,
+            np.where(
+                (events_copy["x"] < 0) | (events_copy["x"] >= self.sensor_size[0])))
+        return events_copy
+
 p= {
     "NUM_HIDDEN": 256,
     "BATCH_SIZE": 32,
     "NUM_EPOCHS": 100,
-    "GRAD_LIMIT": 100.0,
+    "GRAD_LIMIT": 50.0,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
-    "NAME": "test3",
+    "NAME": "test9",
     "OUT_DIR": ".",
     "SEED": 345,
     "MIN_W_RAF": 0.07,
     "MAX_W_RAF": 0.08,
     "MIN_B_RAF": -0.05,
     "MAX_B_RAF": -0.01,
-    "REG_LAMBDA": 1e-10,
+    "REG_LAMBDA": 5e-7,
+    "IN_HID_MEAN": 0.015,
+    "IN_HID_STD": 0.005,
+    "ETA": 0.0005,
+    "AUGMENT_SHIFT": 20.0
 }
 
 if len(sys.argv) > 1:
@@ -83,19 +104,10 @@ num_output = len(dataset.classes)
 
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
 
-lif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v", "c")},
-                        threshold="v - v_thr",
-                        output_var_name="v",
-                        param_vals={"a": 0, "b": 1/20, "c": 0, "v_thr": 1},
-                        var_vals={"v": 0})
+# make augmentations
+shift = Shift(p["AUGMENT_SHIFT"], dataset.sensor_size)
 
-
-alif_neuron = UserNeuron(vars={"v": ("Isyn + a - b * v + g * (d - v)", "c"), "g":("-g / tau", "e")},
-                        threshold="v - v_thr",
-                        output_var_name="v",
-                        param_vals={"a": 0, "b": 1/20, "c": 0, "d": 0, "e": 0.2, "tau": 100, "v_thr": 1},
-                        var_vals={"v": 0, "g": 0})
-# raf doesn'work currently (maybe just bad parameter choices)
+# raf neurons
 raf_neuron = UserNeuron(vars={"x": ("Isyn + b * x - w * y", "x"), "y": ("w * x + b * y", "y"), "q": ("-gma*q", "q+1")},
                         threshold="y - (a_thresh+q)",
                         output_var_name="y",
@@ -104,15 +116,6 @@ raf_neuron = UserNeuron(vars={"x": ("Isyn + b * x - w * y", "x"), "y": ("w * x +
                         sub_steps=100,
                         solver="linear_euler"
 )
-
-qif_neuron = UserNeuron(vars={"v": ("(v*(v-v_c) + Isyn) / tau_mem", "0.0")},
-                        threshold="v - 1.0",
-                        output_var_name="v",
-                        param_vals={"tau_mem": 20.0, "v_c": 0.5},
-                        var_vals={"v": 0.0})
-
-
-
 
 network = Network()
 with network:
@@ -125,7 +128,7 @@ with network:
                         num_output, record_spikes=True)
 
     # Connections
-    Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=0.03, sd=0.01)),
+    Conn_Pop0_Pop1 = Connection(input, hidden, Dense(Normal(mean=p["IN_HID_MEAN"], sd=p["IN_HID_STD"])),
                Exponential(5.0))
     Connection(hidden, output, Dense(Normal(mean=0.0, sd=0.03)),
                Exponential(5.0))
@@ -150,27 +153,37 @@ resfile.write(f"# Speaker_left Epoch hidden_n_zero mean_hidden_mean_spike std_hi
 resfile.close()
 
 for left in spklist:
-    train_spikes = [spikes[i] for i in np.where(speakers != left)[0]]
-    train_labels = [labels[i] for i in np.where(speakers != left)[0]]
-    val_spikes = [spikes[i] for i in np.where(speakers == left)[0]]
-    val_labels = [labels[i] for i in np.where(speakers == left)[0]]
-    print(f"Leave speaker {left}: training with {len(train_spikes)} examples and validating with {len(val_spikes)}.") 
-    compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}", optimisers= {"all_connections": {"weight": Adam(0.001)}, hidden: {"b": Adam(0.001), "w": Adam(0.001)}})
+    # Preprocess
+    spikes_train = []
+    labels_train = []
+    spikes_val = []
+    labels_val = []
+    for i in range(len(dataset)):
+        events, label = dataset[i]
+        if speakers[i] != left:
+            spikes_train.append(preprocess_tonic_spikes(shift(events), dataset.ordering, dataset.sensor_size))
+            labels_train.append(label)
+        else:
+            spikes_val.append(preprocess_tonic_spikes(shift(events), dataset.ordering, dataset.sensor_size))
+            labels_val.append(label)
+        
+    print(f"Leave speaker {left}: training with {len(spikes_train)} examples and validating with {len(spikes_val)}.") 
+    compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}", optimisers= {"all_connections": {"weight": Adam(p["ETA"])}, hidden: {"b": Adam(p["ETA"]), "w": Adam(p["ETA"])}})
     with compiled_net:
         # Evaluate model on numpy dataset
         start_time = perf_counter()
         callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
-            Checkpoint(serialiser),
+            #Checkpoint(serialiser),
         ]
         val_callbacks =  [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True)
         ]
         for e in range(p["NUM_EPOCHS"]):
-            metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: train_spikes},
-                                                                             {output: train_labels},
-                                                                             validation_x={input: val_spikes},
-                                                                             validation_y={output: val_labels},
+            metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: spikes_train},
+                                                                             {output: labels_train},
+                                                                             validation_x={input: spikes_val},
+                                                                             validation_y={output: labels_val},
                                                                              num_epochs=1, start_epoch=e, shuffle=True,
                                                                              callbacks=callbacks,
                                                                              validation_callbacks=val_callbacks)
