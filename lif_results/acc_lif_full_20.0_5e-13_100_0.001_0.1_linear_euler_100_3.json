@@ -1,0 +1,11 @@
+{
+    "train_acc_warmup": "0.2994114762138303",
+    "test_acc_warmup": "0.4085689045936396",
+    "meanspike_warmup": "1989562.0",
+    "nonspike_warmup": "0",
+    "epoch_warmup": "2",
+    "train_acc": "0.8921039725355566",
+    "test_acc": "0.8295053003533569",
+    "meanspike": "2407267.8671875",
+    "nonspike": "0"
+}
