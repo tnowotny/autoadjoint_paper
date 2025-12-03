@@ -117,7 +117,8 @@ compiler = EventPropCompiler(example_timesteps = params.get("NUM_FRAMES") * para
                              max_spikes=1500,
                              grad_limit= 50.0,)
 
-speaker_id = np.sort(training_details.Speaker.unique())
+#speaker_id = np.sort(training_details.Speaker.unique())
+speaker_id = np.asarray([ 11, 2, 7, 3, 6, 8, 10, 0, 9, 1 ])
 speaker_id = speaker_id.astype('int8')  #np where is fussy with int
 
 # Create sequential model
@@ -185,6 +186,8 @@ for count, speaker_left in enumerate(speaker_id):
             e_train = copy.deepcopy(fold_train)
             e_train, e_train_labels = aug.merge_and_return_a_new(e_train, fold_train_labels, percentage_added = 1.0)
             e_train, e_train_labels = aug.augmentation_y_shift(e_train, e_train_labels, params["aug_shift"])
+            if params["neuron_dropout"] > 0.0:
+                e_train, e_train_labels = aug.neuron_dropout(e_train, e_train_labels, params["NUM_INPUT"], params["neuron_dropout"])
             e_train_spikes = []
             for events in e_train:
                 e_train_spikes.append(preprocess_tonic_spikes(events, 

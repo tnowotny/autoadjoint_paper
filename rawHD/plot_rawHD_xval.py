@@ -12,8 +12,8 @@ with open(sys.argv[1]) as f:
     labels= f.readline().strip("\n").split(" ")
     labels.pop(0)
 
-ls = [ '-', '--','-.',":", (0, (1, 10)), (0, (5, 10))]
-run_splits = np.where(np.diff(d[:,0]) < 0)[0]+1
+ls = [ '-', ":", '--','-.', (0, (1, 10)), (0, (5, 10))]
+run_splits = np.where(np.logical_and(d[:-1,0] != d[0,0], d[1:,0] == d[0,0]))[0]+1
 print(f"run splits: {run_splits}")
 run_splits = np.hstack( [[0], run_splits, [-1]])
 
@@ -29,12 +29,14 @@ for i in range(len(run_splits)-1):
     fold_splits = np.where(np.diff(the_d[:,1]) < 0)[0]+1
     print(f"fold splits: {fold_splits}")
     fold_splits = np.hstack( [[0], fold_splits, [-1]])
+    num_epochs = fold_splits[1]
+    print(num_epochs)
     for y in range(ht):
         for x in range(wd):
             id = y*wd+x
             if id < plotN:
                 for j in range(len(fold_splits - 1)-1):
-                    ax[y,x].plot(the_d[fold_splits[j]:fold_splits[j+1],1]+fold_splits[j],the_d[fold_splits[j]:fold_splits[j+1],id],color=f"C{int(the_d[fold_splits[j],0])}",linestyle=ls[i])
+                    ax[y,x].plot(the_d[fold_splits[j]:fold_splits[j+1],1]+the_d[fold_splits[j],0]*num_epochs,the_d[fold_splits[j]:fold_splits[j+1],id],color=f"C{int(the_d[fold_splits[j],0])}",linestyle=ls[i])
                 
                 ax[y,x].set_title(labels[id])
 

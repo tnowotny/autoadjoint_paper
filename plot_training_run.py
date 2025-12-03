@@ -13,7 +13,8 @@ for k in range(len(sys.argv)-1):
         labels.append(f.readline().strip("\n").split(" "))
         labels[k].pop(0)
 colN = [ d[i].shape[1] for i in range(len(d)) ]
-
+print(len(labels[0]))
+print(colN)
 plotN = min(colN)
 #figure out what epochs were calculated
 max_epoch = max(epochs)

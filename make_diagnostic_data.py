@@ -393,10 +393,44 @@ def generate_latency_MNIST_sum(N_train, N_val, N_test, delay, min_time= 0.0, max
                 plt.show()
     return t_train, id_train, lab_train, t_val, id_val, lab_val, t_test, id_test, lab_test
 
+
+def generate_timing_xor(t_0, t_1, t_delay, jitter_std, N_samples, r_noise= 0.0, plot=False):
+    ts = [ t_0, t_1 ]
+    all_t = []
+    all_id = []
+    label = []
+    for i in range(N_samples):
+        for front in range(2):
+            for back in range(2):
+                c = 1 if front*back == 0 and front+back > 0 else 0
+                t = [ ts[front]+np.random.normal(0,jitter_std), t_delay+ts[back]+np.random.normal(0,jitter_std) ]
+                id = [ 0, 0 ]
+                if r_noise > 0.0:
+                    ns_t = fill_Poisson_list(0, t_1+t_delay, r_noise)
+                    ns_id = [1]*len(ns_t)
+                    t= t+ns_t
+                    id= id + ns_id
+                all_t.append(t)
+                all_id.append(id)
+                label.append(c)
+            
+    return all_t, all_id, label
+
+def generate_Poisson_only(t_total, r_noise, N_samples):
+    all_t = []
+    all_id = []    
+    for i in range(N_samples):
+        ns_t = fill_Poisson_list(0, t_total, r_noise)
+        ns_id = [0]*len(ns_t)
+        all_t.append(ns_t)
+        all_id.append(ns_id)
+    return all_t, all_id
+
+
 if __name__ == "__main__":
     #generate_diag_digit_data(1000, 100, 0.01, 0.1, 1, 4, plot=True)
-    #generate_diag_xor_data(1000, 100, 0.01, 0.1, 1, plot=True)
+    #generate_diag_xor_data(300, 100, 0.02, 0.2, 5, plot=True)
     #generate_latency_MNIST_sum(200000, 20000, 100000, 500.0, plot= False)
     #generate_xor_data_identity_coding_Poisson(60.0, 20.0, 0.1, 1.0, 2, plot=True)
-    print(pick_spike_times(10, 30, 5, 3))
-    generate_xor_data_identity_coding(60.0, 20.0, 5, 2.0, 0.01, 10, plot=True)
+    #print(pick_spike_times(10, 30, 5, 3))
+    generate_xor_data_identity_coding(150.0, 50.0, 10, 1.0, 0.02, 5, plot=True)

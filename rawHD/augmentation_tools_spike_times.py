@@ -90,3 +90,12 @@ def merge_and_return_a_new(array_x,
     
     return (new_array_x + appended_array_x, 
             new_array_y + appended_array_y)
+
+
+def neuron_dropout(array_x, array_y, num_neurons, p_drop):
+    new_x = copy.deepcopy(array_x)
+    for i in range(len(new_x)):
+       drop_neuron = list(np.where(np.random.uniform(size=num_neurons) < p_drop)[0])
+       new_x[i]  = np.delete(new_x[i], [ i for i,x in enumerate(new_x[i]["x"]) if x in drop_neuron])
+
+    return new_x, array_y
