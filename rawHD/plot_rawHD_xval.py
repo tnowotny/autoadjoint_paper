@@ -39,7 +39,9 @@ for i in range(len(run_splits)-1):
                     ax[y,x].plot(the_d[fold_splits[j]:fold_splits[j+1],1]+the_d[fold_splits[j],0]*num_epochs,the_d[fold_splits[j]:fold_splits[j+1],id],color=f"C{int(the_d[fold_splits[j],0])}",linestyle=ls[i])
                 
                 ax[y,x].set_title(labels[id])
-
+x = (plotN-1) % wd
+y = (plotN-1) // wd
+ax[y,x].set_ylim([ 0.5, 1])
 #print(sys.argv[1:])
 #ax[0,0].legend(sys.argv[1:])
 plt.show()
