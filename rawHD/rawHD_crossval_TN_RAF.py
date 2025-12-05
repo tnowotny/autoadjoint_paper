@@ -128,9 +128,6 @@ with network:
                                 sd = params.get("hidden_output_w_sd"))),
                 Exponential(params["tau_syn"]))
     
-clamp_weight_conns_dir = {i2h: (-10, 10), h2o: (-10, 10)}
-if params["recurrent"] : clamp_weight_conns_dir = {i2h: (-10, 10), h2h: (-10, 10), h2o: (-10, 10)}
-
 compiler = EventPropCompiler(example_timesteps = params.get("NUM_FRAMES") * params.get("INPUT_FRAME_TIMESTEP"),
                              losses="sparse_categorical_crossentropy",
                              batch_size = params.get("BATCH_SIZE"),
@@ -195,8 +192,7 @@ for count, speaker_left in enumerate(speaker_id):
     
         callbacks = []
         val_callbacks = []
-        if params.get("recurrent"):
-            callbacks.append(OptimiserParamSchedule("alpha", alpha_schedule))
+        callbacks.append(OptimiserParamSchedule("alpha", alpha_schedule))
 
         if params.get("verbose"):
             callbacks.append("batch_progress_bar")

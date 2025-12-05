@@ -25,6 +25,8 @@ ht = plotN // wd +1
 
 fig, ax = plt.subplots(ht, wd, sharex=True)
 
+all_avg = []
+all_std = []
 for i in range(len(run_splits)-1):
     the_d = d[run_splits[i]:run_splits[i+1]]
     fold_splits = np.where(np.diff(the_d[:,1]) < 0)[0]+1
@@ -46,15 +48,16 @@ for i in range(len(run_splits)-1):
                         avg[id-plotN+2,which]= np.mean(the_d[fold_splits[j+1]-NUM_AVG:fold_splits[j+1],id])
                         std[id-plotN+2,which]= np.std(the_d[fold_splits[j+1]-NUM_AVG:fold_splits[j+1],id])
                 ax[y,x].set_title(labels[id])
-
-print("training accuracy:")
-print(avg[0,:])
-print(std[0,:])
-print("validation accuracy:")
-print(avg[1,:])
-print(std[1,:])
-
-print(f"Total avg training: {np.mean(avg[0,:])} +/- {np.std(avg[0,:])}, validation: {np.mean(avg[1,:])} +/- {np.std(avg[1,:])}")
+    all_avg.append(avg)
+    all_std.append(std)
+for i, (avg, std) in enumerate(zip(all_avg, all_std)):
+    print(f"run {i} training accuracy:")
+    print(avg[0,:])
+    print(std[0,:])
+    print(f"run {i} validation accuracy:")
+    print(avg[1,:])
+    print(std[1,:])
+    print(f"Total avg training: {np.mean(avg[0,:])} +/- {np.std(avg[0,:])}, validation: {np.mean(avg[1,:])} +/- {np.std(avg[1,:])}")
 x = (plotN-1) % wd
 y = (plotN-1) // wd
 ax[y,x].set_ylim([ 0.5, 1])
