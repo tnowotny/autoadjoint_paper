@@ -53,7 +53,8 @@ print(std[0,:])
 print("validation accuracy:")
 print(avg[1,:])
 print(std[1,:])
-#print(sys.argv[1:])
-#ax[0,0].legend(sys.argv[1:])
+x = (plotN-1) % wd
+y = (plotN-1) // wd
+ax[y,x].set_ylim([ 0.5, 1])
 plt.show()
 
