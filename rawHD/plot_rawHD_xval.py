@@ -34,8 +34,8 @@ for i in range(len(run_splits)-1):
     fold_splits = np.hstack( [[0], fold_splits, [-1]])
     num_epochs = fold_splits[1]
     print(num_epochs)
-    avg = np.zeros((2, len(fold_splits)-1))
-    std = np.zeros((2, len(fold_splits)-1))
+    avg = np.zeros((2, len(speakers)))
+    std = np.zeros((2, len(speakers)))
     for y in range(ht):
         for x in range(wd):
             id = y*wd+x
@@ -45,6 +45,7 @@ for i in range(len(run_splits)-1):
                     if id > plotN-3:
                         which = np.where(np.asarray(speakers) == int(the_d[fold_splits[j],0]))[0]
                         print(which)
+                        print(f"{fold_splits[j+1]-NUM_AVG}:{fold_splits[j+1]}")
                         avg[id-plotN+2,which]= np.mean(the_d[fold_splits[j+1]-NUM_AVG:fold_splits[j+1],id])
                         std[id-plotN+2,which]= np.std(the_d[fold_splits[j+1]-NUM_AVG:fold_splits[j+1],id])
                 ax[y,x].set_title(labels[id])
