@@ -13,7 +13,7 @@ with open(sys.argv[1]) as f:
     labels= f.readline().strip("\n").split(" ")
     labels.pop(0)
 
-ls = [ '-', ":", '--','-.', (0, (1, 10)), (0, (5, 10))]
+ls = [ '-', ":", '--','-.', (0, (1, 10)), (0, (5, 10)), (0, (3, 10))]
 run_splits = np.where(np.logical_and(d[:-1,0] != d[0,0], d[1:,0] == d[0,0]))[0]+1
 print(f"run splits: {run_splits}")
 run_splits = np.hstack( [[0], run_splits, [-1]])
