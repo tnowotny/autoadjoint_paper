@@ -25,7 +25,7 @@ import mnist
 import pickle
 
 TRAIN = True
-DEBUG_VARS = False
+DEBUG_VARS = True
 DEBUG_SPIKES = True
 PLOTN = 10
 #logging.basicConfig(level=logging.DEBUG)
@@ -41,7 +41,7 @@ p= {
     "DT": 1.0,
     "LABEL": list(range(10)), #[4,9], 
     "NUM_EXAMPLES": 60000,
-    "BATCH_SIZE": 64,
+    "BATCH_SIZE": 32,
     "NUM_EPOCHS": 300,
     "GRAD_LIMIT": 1000.0,
     "REG_LAMBDA_UPPER": 0.0,
@@ -51,7 +51,7 @@ p= {
     "KERNEL_PROFILING": False,
     "OUT_DIR": ".",
     "SEED": 345,
-    "TRIGGER_W": 0.25, 
+    "TRIGGER_W": 1.0,#0.25, 
     "IN_HID_MEAN": 0.04,
     "IN_HID_STD": 0.02,
     "HID_HID_MEAN": 0.0,
@@ -146,7 +146,7 @@ alif_neurons = UserNeuron(
                 "thresh": 1.0,
                 "dA": p["DELTA_A"]
     },
-    var_vals={"v": 0.0, "A": np.random.uniform(0.0, p["A_INI_RANGE"],p["NUM_HIDDEN"])},
+    var_vals={"v": 0.0, "A": 0.0}, #np.random.uniform(0.0, p["A_INI_RANGE"],p["NUM_HIDDEN"])},
     solver="exponential_euler"
 )
 
@@ -232,12 +232,14 @@ with compiled_net:
         callbacks.append(VarRecorder(hidden, "A", key=f"A_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
         callbacks.append(VarRecorder(hidden, "LambdaA", key=f"lambdaA_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
         #callbacks.append(VarRecorder(hidden, "Lambdai", key=f"lambdaI_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
+        callbacks.append(VarRecorder(hidden, "out_post", key=f"i_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
+     
         callbacks.append(VarRecorder(output, "v", key="v_output", example_filter= p["EX_FILTER"]))
         callbacks.append(VarRecorder(output, "Lambdav", key="lambdav_output", example_filter= p["EX_FILTER"]))
         
     for e in range(p["NUM_EPOCHS"]):
         print(f"Training {num_examples} examples")
-        metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train({input: spikes[:num_examples]},
+        metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train_validate({input: spikes[:num_examples]},
                                                                          {output: labels[:num_examples]},
                                                                          num_epochs=1, start_epoch=e,shuffle=False,
                                                                          callbacks=callbacks,validation_split= 0.1,
@@ -291,6 +293,8 @@ with compiled_net:
                         ax[i,j].plot(v)
                         A = np.asarray(cb_data[f"A_hidden"])[ex,:,ID].flatten()
                         ax[i,j].plot(A)
+                        I = np.asarray(cb_data[f"i_hidden"])[ex,:,ID].flatten()
+                        ax[i,j].plot(I)
                 plt.suptitle(f"hid fwd {n}")
                 fig, ax = plt.subplots(PLOTN,PLOTN,sharex=True,sharey=True)
                 for i in range(PLOTN):
