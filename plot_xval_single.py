@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+import matplotlib
+
+cmap = matplotlib.colormaps["jet"]
 
 d = []
 labels = []
@@ -39,6 +42,9 @@ for k in range (len(d)):
     plotx.append(the_x)
     splits.append(x)
 
+cstep = 255 // len(d)
+avg = np.zeros((len(d),plotN))
+sig = np.zeros((len(d),plotN))
 for y in range(ht):
     for x in range(wd):
         i = y*wd+x
@@ -46,11 +52,19 @@ for y in range(ht):
             for k in range (len(d)):
                 for j in range(len(splits[k])-1):
                     #print(f"d[{k}][{splits[k][j]+1}:{splits[k][j+1]+1}]")
-                    ax[y,x].plot(plotx[k][j],d[k][splits[k][j]+1:splits[k][j+1]+1,i],color=f"C{k}",lw=1)
+                    ax[y,x].plot(plotx[k][j],d[k][splits[k][j]+1:splits[k][j+1]+1,i],color=cmap(k*cstep),lw=1)
+                avg[k,i] = np.mean(d[k][splits[k][1:],i])
+                sig[k,i] = np.std(d[k][splits[k][1:],i])
                 
             ax[y,x].set_title(labels[0][i])
         if i == plotN - 1:
             ax[y,x].set_ylim([0 ,1])
+
+print(avg)
+print(sig)
+
+np.save("fold_avg",avg)
+np.save("fold_std",sig)
 
 plt.show()
                         
