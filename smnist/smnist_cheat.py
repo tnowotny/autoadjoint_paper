@@ -32,7 +32,8 @@ PLOTN = 10
 
 p= {
     "NUM_INPUT": 79,
-    "NUM_HIDDEN": 100, # ALIF neurons
+    "NUM_HIDDEN": 784, # ALIF neurons
+    "NUM_HIDDEN2": 100,
     "TAU_MEM": 20.0,
     "TAU_A_MEAN": 700,
     "TAU_A_STD": 200,
@@ -45,22 +46,20 @@ p= {
     "NUM_EPOCHS": 300,
     "GRAD_LIMIT": 100.0,
     "MAX_DELAY": 10,
-    "REG_LAMBDA_UPPER": 5e-9,
-    "REG_LAMBDA_LOWER": 5e-9,
-    "REG_NU_UPPER": 18,
+    "REG_LAMBDA_UPPER": 1e-8,
+    "REG_LAMBDA_LOWER": 1e-8,
+    "REG_NU_UPPER": 10,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
     "OUT_DIR": ".",
     "SEED": 345,
-    "TRIGGER_W": 0.35, 
-    "IN_HID_MEAN": 0.06,
-    "IN_HID_STD": 0.01,
-    "HID_HID_MEAN": 0.0,
-    "HID_HID_STD": 0.04,
-    "HID_OUT_MEAN": 0.0,
-    "HID_OUT_STD": 0.1,
+    "W_IN_HID": 0.1,
+    "HID_HID2_MEAN": 0.0,
+    "HID_HID2_STD": 0.1,
+    "HID2_OUT_MEAN": 0.0,
+    "HID2_OUT_STD": 0.1,
     "TAU_SYN": 5.0,
-    "LR": 0.001,
+    "LR": 0.0005,
     "LR_FAC": 0.995,
     "EX_FILTER": [ 32, 64, 96, 5032, 5064, 5096 ]
 }
@@ -77,7 +76,6 @@ mnist.datasets_url = "https://storage.googleapis.com/cvdf-datasets/mnist/"
 images = mnist.train_images()
 
 spikes = []
-trigger_spikes = []
 labels = []
 max_spikes = 0.0
 latest_spike_time = 0.0
@@ -86,7 +84,6 @@ extra = []
 for j in range (2*28):
     extra.append((785000+j*1000, 0, 1))
 events, label = dataset[0]
-trigger_events= np.asarray(extra, dtype=events.dtype)
 ex_events = []
 for i in range(len(dataset)):
     events, label = dataset[i]
@@ -104,8 +101,6 @@ for i in range(len(dataset)):
         latest_spike_time = max(latest_spike_time, np.amax(events["t"]) / 1000.0)
         spikes.append(preprocess_tonic_spikes(events, dataset.ordering,
                                           dataset.sensor_size))
-        trigger_spikes.append(preprocess_tonic_spikes(trigger_events, dataset.ordering,
-                                                      (1,1,1)))
         labels.append(p["LABEL"].index(label))
         the_img.append(i)
         #print(the_img)
@@ -130,7 +125,7 @@ plt.show()
 
 num_examples = len(spikes)
 num_examples = min(p["NUM_EXAMPLES"], num_examples)
-max_example_timesteps = int((latest_spike_time+ 50*p["TAU_MEM"])/ p["DT"])
+max_example_timesteps = int((784+p["TAU_MEM"])/p["DT"])
 print(f"max_example_timesteps: {max_example_timesteps}")
 
 # DEBUG_MODE is meant to run only shortly and do some diagnostic plots
@@ -157,15 +152,12 @@ print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 num_output = len(p["LABEL"])
 
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
-
-w_inhid = np.random.normal(p["IN_HID_MEAN"], p["IN_HID_STD"],(p["NUM_INPUT"],p["NUM_HIDDEN"]))
+w_inhid = p["W_IN_HID"]*np.ones((p["NUM_INPUT"],p["NUM_HIDDEN"]))
+#w_inhid = np.random.normal(p["IN_HID_MEAN"], p["IN_HID_STD"],(p["NUM_INPUT"],p["NUM_HIDDEN"]))
 d_inhid = np.asarray(list(range(p["NUM_HIDDEN"]))*p["NUM_INPUT"])
 print(f"w_inhid: {w_inhid.shape}")
 print(f"d_inhid: {d_inhid.shape}")
 print(f"d_inhid: {d_inhid}")
-
-
-w_tinhid = p["TRIGGER_W"]
 
 
 alif_neurons = UserNeuron(
@@ -198,12 +190,10 @@ with network:
     # Populations
     input = Population(SpikeInput(max_spikes=p["BATCH_SIZE"] * max_spikes),
                        p["NUM_INPUT"], record_spikes=DEBUG_SPIKES)
-    trigger_input = Population(SpikeInput(max_spikes=p["BATCH_SIZE"] * max_spikes),
-                       1, record_spikes=DEBUG_SPIKES)
-    hidden = Population(alif_neurons, p["NUM_HIDDEN"], record_spikes=True)
-
+    hidden = Population(lif_neurons, p["NUM_HIDDEN"], record_spikes=True)
+    hidden2 = Population(lif_neurons, p["NUM_HIDDEN2"], record_spikes=True)
     window_start = 784
-    window_end = 860
+    window_end = max_example_timesteps*p["DT"]
     print(f"window: [{window_start}, {window_end}]")
     ro = AvgVar(window_start=window_start, window_end=window_end)
     output = Population(LeakyIntegrate(tau_mem=20.0, readout=ro),
@@ -211,14 +201,13 @@ with network:
 
     # Connections
     inhid = Connection(input, hidden, Dense(w_inhid,d_inhid),
-                       Exponential(p["TAU_SYN"]), max_delay_steps=p["MAX_DELAY"])
-    tinhid = Connection(trigger_input, hidden, Dense(w_tinhid),
-                       Exponential(p["TAU_SYN"]))
-    hidhid = Connection(hidden, hidden, Dense(Normal(mean=p["HID_HID_MEAN"],
-                                                     sd=p["HID_HID_STD"]),Uniform(0,p["MAX_DELAY"])),
-                        Exponential(p["TAU_SYN"]), max_delay_steps=p["MAX_DELAY"])
-    hidout = Connection(hidden, output, Dense(Normal(mean=p["HID_OUT_MEAN"],
-                                                     sd=p["HID_OUT_STD"])),
+                       Exponential(p["TAU_SYN"]), max_delay_steps=784)
+
+    hidhid2 = Connection(hidden, hidden2, Dense(Normal(mean=p["HID_HID2_MEAN"],
+                                                       sd=p["HID_HID2_STD"])),
+                        Exponential(p["TAU_SYN"]))
+    hid2out = Connection(hidden2, output, Dense(Normal(mean=p["HID2_OUT_MEAN"],
+                                                      sd=p["HID2_OUT_STD"])),
                         Exponential(p["TAU_SYN"]))
 
 compiler = EventPropCompiler(example_timesteps=max_example_timesteps,
@@ -237,14 +226,15 @@ else:
     timefile.write(f"# Total_time\n")
 resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "w")
 resfile.write(f"# Epoch ")
-resfile.write(f"hidden_n_zero mean_hidden_mean_spike ")
-resfile.write(f"val_hidden_n_zero val_mean_hidden_mean_spike ")
+for l in ["", "2"]:
+    resfile.write(f"hidden{l}_n_zero mean_hidden{l}_mean_spike ")
+    resfile.write(f"val_hidden{l}_n_zero val_mean_hidden{l}_mean_spike ")
 resfile.write(f"train_accuracy validation_accuracy\n")
 resfile.close()
 
-optimisers= {inhid: {"weight": Adam(p["LR"])},
-             hidhid: {"weight": Adam(p["LR"])},
-             hidout: {"weight": Adam(p["LR"])}}
+optimisers= {#inhid: {"weight": Adam(p["LR"])},
+             hidhid2: {"weight": Adam(p["LR"])},
+             hid2out: {"weight": Adam(p["LR"])}}
 compiled_net = compiler.compile(network,f"{p['OUT_DIR']}/{p['NAME']}",
                                 optimisers=optimisers)
 with compiled_net:
@@ -256,18 +246,21 @@ with compiled_net:
     if DEBUG_SPIKES:
         callbacks = [
             SpikeRecorder(input, key="spikes_input"),
-            SpikeRecorder(trigger_input, key="spikes_trigger"),
             SpikeRecorder(hidden, key="spikes_hidden"),
+            SpikeRecorder(hidden2, key="spikes_hidden2"),
         ]
         val_callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden"),
+            SpikeRecorder(hidden2, key="spikes_hidden2"),
         ]
     else:
         callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
+            SpikeRecorder(hidden2, key="spikes_hidden2",record_counts=True),
         ]
         val_callbacks = [
             SpikeRecorder(hidden, key="spikes_hidden",record_counts=True),
+            SpikeRecorder(hidden2, key="spikes_hidden2",record_counts=True),
         ]
         
     if DEBUG_VARS:
@@ -284,30 +277,31 @@ with compiled_net:
     callbacks.append(OptimiserParamSchedule("alpha", alpha_schedule))
     for e in range(p["NUM_EPOCHS"]):
         print(f"Training {num_examples} examples")
-        metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train_validate({input: spikes[:num_examples], trigger_input: trigger_spikes[:num_examples]},
+        metrics, val_metrics, cb_data, val_cb_data  = compiled_net.train_validate({input: spikes[:num_examples]},
                                                                          {output: labels[:num_examples]},
                                                                          num_epochs=1, start_epoch=e,shuffle=False,
                                                                          callbacks=callbacks,validation_split= 0.1,
                                                                          validation_callbacks=val_callbacks)
         
         
-        if DEBUG_SPIKES:
-            #print(cb_data['spikes_hidden'][0])
-            #exit(1)
-            n0 = np.asarray([[np.sum(cb_data[f"spikes_hidden"][1][i] == j) for j in range(p[f"NUM_HIDDEN"])] for i in range(len(cb_data[f"spikes_hidden"][1]))])
-            n0_val = np.asarray([[np.sum(val_cb_data[f"spikes_hidden"][1][i] == j) for j in range(p[f"NUM_HIDDEN"])] for i in range(len(val_cb_data[f"spikes_hidden"][1]))])
-        else:
-            n0 = np.asarray(cb_data[f"spikes_hidden"])
-            n0_val = np.asarray(val_cb_data[f"spikes_hidden"])
         resfile= open(os.path.join(p["OUT_DIR"], p["NAME"]+"_results.txt"), "a")
         resfile.write(f"{e} ")
-        mean_n0 = np.mean(n0, axis = 0)
-        #plt.figure()
-        #plt.hist(mean_n0, bins = p["NUM_HIDDEN"])
-        #plt.show()
-        mean_n0_val = np.mean(n0_val, axis = 0)
-        resfile.write(f"{np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} ")
-        resfile.write(f"{np.count_nonzero(mean_n0_val==0)} {np.mean(mean_n0_val)} ")
+        for l in ["", "2"]:
+            if DEBUG_SPIKES:
+                #print(cb_data['spikes_hidden'][0])
+                #exit(1)
+                n0 = np.asarray([[np.sum(cb_data[f"spikes_hidden{l}"][1][i] == j) for j in range(p[f"NUM_HIDDEN{l}"])] for i in range(len(cb_data[f"spikes_hidden{l}"][1]))])
+                n0_val = np.asarray([[np.sum(val_cb_data[f"spikes_hidden{l}"][1][i] == j) for j in range(p[f"NUM_HIDDEN{l}"])] for i in range(len(val_cb_data[f"spikes_hidden{l}"][1]))])
+            else:
+                n0 = np.asarray(cb_data[f"spikes_hidden{l}"])
+                n0_val = np.asarray(val_cb_data[f"spikes_hidden{l}"])
+            mean_n0 = np.mean(n0, axis = 0)
+            #plt.figure()
+            #plt.hist(mean_n0, bins = p["NUM_HIDDEN{l}"])
+            #plt.show()
+            mean_n0_val = np.mean(n0_val, axis = 0)
+            resfile.write(f"{np.count_nonzero(mean_n0==0)} {np.mean(mean_n0)} ")
+            resfile.write(f"{np.count_nonzero(mean_n0_val==0)} {np.mean(mean_n0_val)} ")
         resfile.write(f"{metrics[output].result} {val_metrics[output].result}\n")
         resfile.close()
         for ex,n in enumerate(p["EX_FILTER"]):
@@ -319,19 +313,17 @@ with compiled_net:
                 if DEBUG_SPIKES:
                     t_spk = np.asarray(cb_data['spikes_input'][0][n])
                     id_spk = np.asarray(cb_data['spikes_input'][1][n])
-                    tt_spk = np.asarray(cb_data['spikes_trigger'][0][n])
-                    tid_spk = np.asarray(cb_data['spikes_trigger'][1][n])              
                     plt.figure()
                     plt.scatter(t_spk, id_spk, s=2, marker="|")
-                    plt.scatter(tt_spk, tid_spk, s=2, marker="|")
                     plt.xlim([ 0, max_example_timesteps*p["DT"]])
                     plt.title(f"input ex {n}, epoch={e}")
-                    t_spk = np.asarray(cb_data[f"spikes_hidden"][0][n])
-                    id_spk = np.asarray(cb_data[f"spikes_hidden"][1][n])
-                    plt.figure()
-                    plt.scatter(t_spk, id_spk, s=2, marker="|")
-                    plt.xlim([ 0, max_example_timesteps*p["DT"]])
-                    plt.title(f"hidden ex {n}, epoch={e}")
+                    for l in ["", "2"]:
+                        t_spk = np.asarray(cb_data[f"spikes_hidden{l}"][0][n])
+                        id_spk = np.asarray(cb_data[f"spikes_hidden{l}"][1][n])
+                        plt.figure()
+                        plt.scatter(t_spk, id_spk, s=2, marker="|")
+                        plt.xlim([ 0, max_example_timesteps*p["DT"]])
+                        plt.title(f"hidden{l} ex {n}, epoch={e}")
                 if DEBUG_VARS:
                     fig, ax = plt.subplots(PLOTN,PLOTN,sharex=True,sharey=True)
                     for i in range(PLOTN):
