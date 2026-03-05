@@ -42,13 +42,13 @@ class Shift:
         return events_copy
 
 p= {
-    "NUM_HIDDEN": 256,
+    "NUM_HIDDEN": 128,
     "BATCH_SIZE": 32,
-    "NUM_EPOCHS": 100,
+    "NUM_EPOCHS": 200,
     "GRAD_LIMIT": 50.0,
     "DT": 1.0,
     "KERNEL_PROFILING": False,
-    "NAME": "test9",
+    "NAME": "test10",
     "OUT_DIR": ".",
     "SEED": 345,
     "MIN_W_RAF": 0.07,

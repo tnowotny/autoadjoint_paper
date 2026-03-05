@@ -32,9 +32,9 @@ PLOTN = 10
 
 p= {
     "NUM_INPUT": 79,
-    "NUM_HIDDEN": 784, # ALIF neurons
+    "NUM_HIDDEN": 784*2, # ALIF neurons
     "NUM_HIDDEN2": 100,
-    "TAU_MEM": 20.0,
+    "TAU_MEM": 10.0,
     "TAU_A_MEAN": 700,
     "TAU_A_STD": 200,
     "DELTA_A": 0.2,
@@ -53,13 +53,13 @@ p= {
     "KERNEL_PROFILING": False,
     "OUT_DIR": ".",
     "SEED": 345,
-    "W_IN_HID": 0.1,
+    "W_IN_HID": 0.2,
     "HID_HID2_MEAN": 0.0,
     "HID_HID2_STD": 0.1,
     "HID2_OUT_MEAN": 0.0,
     "HID2_OUT_STD": 0.1,
-    "TAU_SYN": 5.0,
-    "LR": 0.0005,
+    "TAU_SYN": 2.5,
+    "LR": 0.0001,
     "LR_FAC": 0.995,
     "EX_FILTER": [ 32, 64, 96, 5032, 5064, 5096 ]
 }
@@ -152,10 +152,16 @@ print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 num_output = len(p["LABEL"])
 
 serialiser = Numpy(f"{p['OUT_DIR']}/{p['NAME']}_checkpoints")
-w_inhid = p["W_IN_HID"]*np.ones((p["NUM_INPUT"],p["NUM_HIDDEN"]))
+
+onblock = p["W_IN_HID"]*np.ones((p["NUM_INPUT"]//2,p["NUM_HIDDEN"]//2))
+offblock = np.zeros((p["NUM_INPUT"]//2,p["NUM_HIDDEN"]//2))
+
+w_inhid = np.vstack([np.zeros((1,p["NUM_HIDDEN"])), np.hstack([ onblock, offblock]), np.hstack([ offblock, onblock])])
+
 #w_inhid = np.random.normal(p["IN_HID_MEAN"], p["IN_HID_STD"],(p["NUM_INPUT"],p["NUM_HIDDEN"]))
-d_inhid = np.asarray(list(range(p["NUM_HIDDEN"]))*p["NUM_INPUT"])
+d_inhid = np.asarray(list(range(p["NUM_HIDDEN"]//2))*2*p["NUM_INPUT"])
 print(f"w_inhid: {w_inhid.shape}")
+print(f"w_inhid: {w_inhid}")
 print(f"d_inhid: {d_inhid.shape}")
 print(f"d_inhid: {d_inhid}")
 
@@ -264,13 +270,13 @@ with compiled_net:
         ]
         
     if DEBUG_VARS:
-        callbacks.append(VarRecorder(hidden, "v", key=f"v_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
-        callbacks.append(VarRecorder(hidden, "Lambdav", key=f"lambdav_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
-        callbacks.append(VarRecorder(hidden, "A", key=f"A_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
-        callbacks.append(VarRecorder(hidden, "LambdaA", key=f"lambdaA_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
+        callbacks.append(VarRecorder(hidden2, "v", key=f"v_hidden2", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
+        callbacks.append(VarRecorder(hidden2, "Lambdav", key=f"lambdav_hidden2", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
+        #callbacks.append(VarRecorder(hidden, "A", key=f"A_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
+        #callbacks.append(VarRecorder(hidden, "LambdaA", key=f"lambdaA_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
         #callbacks.append(VarRecorder(hidden, "Lambdai", key=f"lambdaI_hidden", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
         callbacks.append(VarRecorder(inhid, "out_post", key=f"i_inhid", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
-        callbacks.append(VarRecorder(hidhid, "out_post", key=f"i_hidhid", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
+        callbacks.append(VarRecorder(hidhid2, "out_post", key=f"i_hidhid2", neuron_filter=np.arange(PLOTN*PLOTN), example_filter= p["EX_FILTER"]))
 
         callbacks.append(VarRecorder(output, "v", key="v_output", example_filter= p["EX_FILTER"]))
         callbacks.append(VarRecorder(output, "Lambdav", key="lambdav_output", example_filter= p["EX_FILTER"]))
@@ -330,13 +336,13 @@ with compiled_net:
                         for j in range(PLOTN):
                             ID = i*PLOTN+j
                             #ax[i,j].set_xlim([0, p["DT"]*784+56+20.0])
-                            v = np.asarray(cb_data[f"v_hidden"])[ex,:,ID].flatten()
+                            v = np.asarray(cb_data[f"v_hidden2"])[ex,:,ID].flatten()
                             ax[i,j].plot(v)
-                            A = np.asarray(cb_data[f"A_hidden"])[ex,:,ID].flatten()
-                            ax[i,j].plot(A)
+                            #A = np.asarray(cb_data[f"A_hidden"])[ex,:,ID].flatten()
+                            #ax[i,j].plot(A)
                             I = np.asarray(cb_data[f"i_inhid"])[ex,:,ID].flatten()
                             ax[i,j].plot(I)
-                            I = np.asarray(cb_data[f"i_hidhid"])[ex,:,ID].flatten()
+                            I = np.asarray(cb_data[f"i_hidhid2"])[ex,:,ID].flatten()
                             ax[i,j].plot(I)
                     plt.suptitle(f"hid fwd {n}")
                     fig, ax = plt.subplots(PLOTN,PLOTN,sharex=True,sharey=True)
@@ -344,10 +350,10 @@ with compiled_net:
                         for j in range(PLOTN):
                             ID = i*PLOTN+j
                             #ax[i,j].set_xlim([0, p["DT"]*784+56+20.0])
-                            v = np.asarray(cb_data[f"lambdav_hidden"])[ex,:,ID].flatten()
+                            v = np.asarray(cb_data[f"lambdav_hidden2"])[ex,:,ID].flatten()
                             ax[i,j].plot(v)
-                            A = np.asarray(cb_data[f"lambdaA_hidden"])[ex,:,ID].flatten()
-                            ax[i,j].plot(A)
+                            #A = np.asarray(cb_data[f"lambdaA_hidden"])[ex,:,ID].flatten()
+                            #ax[i,j].plot(A)
                     plt.suptitle(f"hid bwd {n-p['BATCH_SIZE']}")
                     fig, ax = plt.subplots(2,2,sharex=True,sharey=True)
                     for i in range(1):

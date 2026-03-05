@@ -30,12 +30,17 @@ DEBUG_VARS = False
 DEBUG_SPIKES = False
 PLOTN = 10
 #logging.basicConfig(level=logging.DEBUG)
+if DEBUG_VARS or DEBUG_SPIKES:
+    SHUFFLE = False
+else:
+    SHUFFLE = True
+
 
 p= {
     "NUM_INPUT": 80,
     "NUM_HIDDEN": 784, # ALIF neurons
     "NUM_HIDDEN2": 100,
-    "TAU_MEM": 20.0,
+    "TAU_MEM": 5.0,
     "TAU_A_MEAN": 700,
     "TAU_A_STD": 200,
     "DELTA_A": 0.2,
@@ -59,10 +64,10 @@ p= {
     "HID_HID2_STD": 0.1,
     "HID2_OUT_MEAN": 0.0,
     "HID2_OUT_STD": 0.1,
-    "TAU_SYN": 5.0,
+    "TAU_SYN": 1.0,
     "LR": 0.0005,
     "LR_FAC": 0.995,
-    "EX_FILTER": [ 32, 64, 96, 5032, 5064, 5096 ]
+    "EX_FILTER": [ 32, 64, 96, 128, 160, 192 ]
 }
 
 if len(sys.argv) == 2:
@@ -100,6 +105,7 @@ for i in range(len(times)):
         labels.append(p["LABEL"].index(train_labels[i]))
         the_img.append(i)
 
+print(the_img)
 fig1, ax1 = plt.subplots(10, 10)
 for i in range(10):
     for j in range(10):
@@ -187,7 +193,7 @@ with network:
     window_end = max_example_timesteps*p["DT"]
     print(f"window: [{window_start}, {window_end}]")
     ro = AvgVar(window_start=window_start, window_end=window_end)
-    output = Population(LeakyIntegrate(tau_mem=20.0, readout=ro),
+    output = Population(LeakyIntegrate(tau_mem=5.0, readout=ro),
                         num_output)
 
     # Connections
