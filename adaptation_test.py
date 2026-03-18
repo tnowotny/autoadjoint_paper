@@ -5,10 +5,11 @@ from ml_genn import Connection, Network, Population
 from ml_genn.callbacks import SpikeRecorder, Callback, VarRecorder
 from ml_genn.compilers import EventPropCompiler
 from ml_genn.connectivity import OneToOne, Dense
-from ml_genn.neurons import LeakyIntegrate, SpikeInput, UserNeuron
+from ml_genn.neurons import LeakyIntegrate, SpikeInput, UserNeuron, LeakyIntegrateFire
 from ml_genn.optimisers import Adam
 from ml_genn.serialisers import Numpy
 from ml_genn.synapses import Exponential
+from ml_genn.initializers import Normal
 
 
 from ml_genn.utils.data import preprocess_spikes
@@ -17,9 +18,10 @@ spikes = []
 labels = []
 rate = 50
 T = 1000
+
+
 for e in range(32):
-    ind = []
-    time = []
+    ind, time = [], []
     for t in range(T):
         rand_num = np.random.rand(1)
         if rand_num[0]<rate/T:
@@ -52,32 +54,42 @@ with network:
                         2)
     
     # Connections
-    inhid = Connection(input, hidden, Dense(weight=1.0),
+    inhid = Connection(input, hidden, Dense(weight=10.0),
                        Exponential(5.0))
-    hidout = Connection(hidden, output, OneToOne(weight=1.0),
+    hidout = Connection(hidden, output, OneToOne(weight=1),
                        Exponential(5.0))
     
 compiler = EventPropCompiler(example_timesteps=1000,
                              losses="sparse_categorical_crossentropy",
                               max_spikes=1500, 
-                             batch_size=32)
+                             batch_size=16)
 
-optimisers= {hidden: {"tau_A": Adam(0.1)}}
+optimisers= {hidden: {"tau_A": Adam(1.0)}}
 compiled_net = compiler.compile(network,
                                optimisers=optimisers)
+serialiser = Numpy("checkpoints_alif")
 
-epoch = 500
+variables = ["v", "A" ,"RingWriteOffset", "RingReadOffset", "RingWriteStartOffset", "RingReadEndOffset", "BackSpike"
+,"tau_AGradient"
+,"tau_A"
+,"LambdavAbsSum"
+,"LambdavLimit"
+,"LambdaAAbsSum"
+,"LambdaALimit"
+,"Lambdav"
+,"LambdaA"
+,"tsRingWriteOffset"
+, "tsRingReadOffset"]
+callbacks = []
+for var in variables:
+    callbacks.append(VarRecorder(hidden, var=var, key=var))
+callbacks.append("batch_progress_bar")
+epoch = 20
 with compiled_net:
     for e in range(epoch):
         metrics, cb_data  = compiled_net.train({input: spikes},
                                                 {output: labels},
                                                 num_epochs=1, start_epoch=e,shuffle=False,
-                                                callbacks=["batch_progress_bar", SpikeRecorder(hidden, "hidden_spikes", record_counts=True),VarRecorder(hidden, var="tau_AGradient", key="tau_AGradient")])
-        hidden_spikes = np.zeros(2)
-        for spk in cb_data["hidden_spikes"]:
-            hidden_spikes += spk
-        grad = np.zeros(2)
-        for spk in cb_data["tau_AGradient"]:
-            grad += spk.sum(0)
-        
-        print(hidden_spikes, grad)            
+                                                callbacks = callbacks)
+
+        compiled_net.save((str(e),), serialiser)
